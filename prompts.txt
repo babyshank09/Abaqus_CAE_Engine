@@ -1,0 +1,27 @@
+1. Prompt for input file generation:
+Hey, I need to generate Abaqus input files with model rotations from 0° to -55° in steps of -6°. 
+The parts to rotate are FRONTHOUSING, LENS, BACKHOUSING, PAD, BATTERY, PCB, SHIELD, SINK, CHIP, and KEYPAD around 
+the axis point (21.255922, 20.748748, 111.038656) and direction (0.0, 0.418677, 1.562525). 
+The model is in e2.inp, and I want to name the model e2. Lets run the rotation script for this range. 
+
+
+
+2. Prompt for odb result extraction:
+Extract the maximum principal stress and peeq values from the odb file named e2,
+located in C:\Users\v-sisubraman\Documents\Perfect_Environment\Agentic_AI\Abaqus_CAE_Cockpit\Abaqus_Environment. 
+The element set is CELLPHONE, and keep only the top 90% of the results based on stress magnitude.
+
+
+
+3. Prompt for CAD to Mesh generation: 
+Take a STEP file located at C:\Users\v-sisubraman\Documents\Perfect_Environment\Agentic_AI\Abaqus_CAE_Cockpit\Abaqus Scripts\Ball_drop_pt4_w_LCM_center.stp, create a model named as Ball_Drop_Model, with a part name as  Ball_Part, mesh it using a global mesh size of 12.0, and use C3D10 as the element type. I want the mesh to be generated and the model saved as a .cae file. 
+
+
+
+4. Prompt for CAD to mesh generation for an assembly file: 
+I have a STEP file located at
+"C:\Users\v-sisubraman\Documents\Perfect_Environment\Agentic_AI\Abaqus_CAE_Cockpit\Abaqus Scripts\Ball_drop_pt4_w_LCM_center.stp".
+I want to import it into Abaqus as a model named Ball_Assembly, mesh all parts in the assembly using a global mesh size of 2.0, and
+apply the element type C3D10. I want the model saved as a .cae file automatically. Can you automate this process for me?
+
+

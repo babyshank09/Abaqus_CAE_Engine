@@ -1,1 +1,1 @@
-"# Abaqus_CAE_Engine" 
+Abaqus_CAE_Engine
