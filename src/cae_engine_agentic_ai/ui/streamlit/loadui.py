@@ -6,7 +6,8 @@ from src.cae_engine_agentic_ai.ui.uiconfigfile import Config
 class LoadStreamlitUI: 
     def __init__(self): 
         self.config = Config() 
-        self.user_controls = {} 
+        self.user_controls = {}  
+
 
     def load_ui(self): 
         st.set_page_config(page_title = self.config.get_title(), page_icon = self.config.get_icon()) 
@@ -30,7 +31,10 @@ class LoadStreamlitUI:
 
                 self.user_controls["OPENAI_API_KEY"] = st.text_input("OpenAI API Key", type="password") 
                 if not self.user_controls["OPENAI_API_KEY"]:
-                    st.warning("⚠️ Please enter your Groq API key to proceed!")  
+                    st.warning("⚠️ Please enter your Groq API key to proceed!")   
+
+            if st.button("Clear Session"): 
+                st.write("Session Cleared")
 
         return self.user_controls
                 

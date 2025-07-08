@@ -1,9 +1,10 @@
 import os 
-import streamlit as st
+import streamlit as st 
 from src.cae_engine_agentic_ai.ui.streamlit.loadui import LoadStreamlitUI   
-from src.cae_engine_agentic_ai.LLMs.openai_llm import OpenAILLM
+from src.cae_engine_agentic_ai.LLMs.openai_llm import OpenAILLM 
+from src.cae_engine_agentic_ai.graph.graph_builder import GraphBuilder
 
-def load_cae_engine(): 
+def load_cae_engine():  
     load_streamlit_ui = LoadStreamlitUI() 
     user_controls = load_streamlit_ui.load_ui()       
     
@@ -12,13 +13,33 @@ def load_cae_engine():
     if user_message: 
         try: 
             openai_llm_obj = OpenAILLM(user_controls_input = user_controls)  
-            llm = openai_llm_obj.get_llm_model()  
+            model = openai_llm_obj.get_llm_model()   
+            if not model:  
+                st.error("LLM could not be initialized")   
+                return    
             
+            model_with_tools = openai_llm_obj.get_llm_with_tools() 
+            if not model_with_tools: 
+                st.error("Tools could not be binded to the LLM")
+
+            usecase = user_controls["selected_usecase"] 
+            if not usecase: 
+                st.error("Usecase is not selected")
+                return  
+            
+            try: 
+                graph_builder = GraphBuilder(model_with_tools = model_with_tools)  
+                graph = graph_builder.setup_graph(usecase = usecase)  
+            except Exception as e: 
+                raise ValueError(f"Error while setting up the graph: {e}") 
+                return 
 
 
+
+                
 
         except Exception as e: 
-            raise ValueError(f"e")
+            raise ValueError(f"{e}")
 
             
 
