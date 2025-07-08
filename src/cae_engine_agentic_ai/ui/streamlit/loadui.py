@@ -6,13 +6,13 @@ from src.cae_engine_agentic_ai.ui.uiconfigfile import Config
 class LoadStreamlitUI: 
     def __init__(self): 
         self.config = Config() 
-        self.user_controls = {}  
+        self.user_controls = {}    
+
 
 
     def load_ui(self): 
         st.set_page_config(page_title = self.config.get_title(), page_icon = self.config.get_icon()) 
         st.header(self.config.get_title())   
-        st.chat_message("assistant").write("Hi, How can I assist you today?") 
 
         with st.sidebar:    
             st.title("Settings") 
@@ -31,11 +31,17 @@ class LoadStreamlitUI:
 
                 self.user_controls["OPENAI_API_KEY"] = st.text_input("OpenAI API Key", type="password") 
                 if not self.user_controls["OPENAI_API_KEY"]:
-                    st.warning("⚠️ Please enter your Groq API key to proceed!")   
+                    st.warning("⚠️ Please enter your Groq API key to proceed!")  
 
-            if st.button("Clear Session"): 
-                st.write("Session Cleared")
+            clear_session = st.button("Clear Session") 
 
+            if "chat_history" not in st.session_state or clear_session: 
+                st.write("Session Cleared") 
+                st.session_state["chat_history"] = []  
+                st.session_state["tools_called"] = []  
+                st.session_state["intro_message_count"] = 0
+                st.session_state["response"] = {"messages": [], "tool_called": []}  
+       
         return self.user_controls
                 
             

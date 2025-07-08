@@ -6,7 +6,7 @@ class CAETaskNode:
     def __init__(self, model_with_tools): 
         self.llm_with_tools = model_with_tools  
 
-    def assistant_node(self, state:State): 
+    def assistant_node(self, state:State)-> dict: 
         content = """ 
         Your name is Jarvis. You are a helpful assistant tasked with performing Abaqus Software related tasks. 
         The user will give you the input from their side.Check if the user input is enough to execute the tasks. 
@@ -14,7 +14,7 @@ class CAETaskNode:
         """   
         
         sys_msg = SystemMessage(content = content)  
-        msg = self.llm_with_tools.invoke({"messages": [sys_msg] + state["messages"]}) 
+        msg = self.llm_with_tools.invoke([sys_msg] + state["messages"]) 
 
         tool_flag =False
         if "tool_calls" in msg.additional_kwargs: 
