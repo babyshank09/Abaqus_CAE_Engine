@@ -1,0 +1,1022 @@
+import os 
+from typing import Optional
+import streamlit as st
+
+
+class Tasks: 
+    def __init__(self): 
+        pass 
+
+
+    def display_input_model(self, input_file_address: str):
+        """ 
+        displays the picture of the model in the input file (.inp) in Abaqus CAE GUI and saves it as a PNG file.
+        """
+        import textwrap  
+        import os
+        import subprocess  
+
+        base_dir = os.path.abspath(r"C:\Users\v-sisubraman\Documents\Perfect_Environment\Agentic_AI\Abaqus_CAE_Cockpit\Productionized_App_v1\Abaqus_Environment")
+        executions_dir = os.path.join(base_dir, "Executions")
+        results_dir = os.path.join(base_dir, "Results")
+
+        os.makedirs(executions_dir, exist_ok=True)
+        os.makedirs(results_dir, exist_ok=True)
+
+        script_path = os.path.join(executions_dir, "display_input_model.py")
+
+        code = textwrap.dedent(f"""
+        # -*- coding: mbcs -*-
+        from abaqus import *
+        from abaqusConstants import *
+        import visualization
+        import os
+
+        def display_inp_model(inp_file_path):
+            
+            if not os.path.isfile(inp_file_path):
+                raise ValueError(f"The specified .inp file does not exist: {{inp_file_path}}")
+
+        
+            model_name = os.path.splitext(os.path.basename(inp_file_path))[0]
+
+        
+            try:
+                mdb.ModelFromInputFile(name=model_name, inputFileName=inp_file_path)
+            except Exception as e:
+                raise RuntimeError(f"Failed to import .inp file: {{str(e)}}")
+
+            
+            session.Viewport(name='Model Viewport', origin=(0, 0), width=300, height=200)
+            vp = session.viewports['Model Viewport']
+            vp.setValues(displayedObject=mdb.models[model_name].rootAssembly)
+            #vp.view.setValues(cameraPosition=(200, 200, 200), cameraUpVector=(0, 1, 0))
+            
+            vp.view.fitView()
+            
+            
+            output_file = os.path.splitext(inp_file_path)[0] + '_display' 
+            output_file_path = os.path.join(r"{results_dir}", "output_image.png") 
+            session.printOptions.setValues(rendition=COLOR)
+            session.printToFile(fileName= output_file_path, format=PNG, canvasObjects=(vp,))
+            print(f"Model displayed and saved as {{output_file_path}}")
+
+
+        try:
+            display_inp_model(r"{input_file_address}")
+        except Exception as e:
+            print(f"Error: {{str(e)}}") 
+        """)
+        
+        with open(script_path, "w") as file: 
+            file.write(code)    
+        print(f"\nPython script successfully created at: {script_path}\n") 
+
+        working_dir = r"C:\Users\v-sisubraman\Documents\Perfect_Environment\Agentic_AI\Abaqus_CAE_Cockpit\Productionized_App_v1\Abaqus_Environment\Executions"
+        abaqus_command = ["abaqus", "cae", "noGUI=display_input_model.py"]
+        subprocess.run(abaqus_command, cwd=working_dir, check=True, capture_output=True, text=True, shell=True)   
+
+        image_path = os.path.join(results_dir, "output_image.png") 
+        return os.path.normpath(image_path)
+
+
+
+
+
+
+
+
+    def ask_inp_file_inputs(self)-> dict: 
+        try:
+            if "inp_file_path" not in st.session_state: 
+                st.session_state.inp_file_path = ""
+            if "start_angle" not in st.session_state:
+                st.session_state.start_angle = 0
+            if "final_angle" not in st.session_state:
+                st.session_state.final_angle = 0
+            if "step_size" not in st.session_state:
+                st.session_state.step_size = 1
+            if "model_name" not in st.session_state:
+                st.session_state.model_name = ""
+            if "instance_list" not in st.session_state:
+                st.session_state.instance_list = ()
+            if "axis_point" not in st.session_state:
+                st.session_state.axis_point = (0.0, 0.0, 0.0)
+            if "axis_direction" not in st.session_state:
+                st.session_state.axis_direction = (0.0, 0.0, 0.0)
+            if "drop_axis" not in st.session_state:
+                st.session_state.drop_axis = "y"
+            if "floor_instance_name" not in st.session_state:
+                st.session_state.floor_instance_name = ""
+
+            inp_file_path= st.text_input(
+                "Input File Location (e.g., path/to/file.inp)",
+                value=st.session_state.inp_file_path,
+                key="inp_file_path_input"
+                )  
+            if st.button("Display Model", key="display_model_button"): 
+                if not inp_file_path: 
+                    st.error("Error: Please provide a valid input file path.")
+                else:
+                    image_path_abs = self.display_input_model(input_file_address=inp_file_path) 
+                    st.image(image_path_abs, caption="Current Model", use_container_width=True)
+                    st.success("Model displayed successfully!")
+                
+            start_angle = st.number_input(
+                "Start Angle (degrees)",
+                step=1,
+                format="%d",
+                value=st.session_state.start_angle,
+                key="start_angle_input"
+            )
+            final_angle = st.number_input(
+                "Final Angle (degrees)",
+                step=1, 
+                format="%d",
+                value=st.session_state.final_angle,
+                key="final_angle_input"
+            )
+            step_size = st.number_input(
+                "Step Size (degrees)",
+                step=1,
+                format="%d",
+                value=st.session_state.step_size,
+                key="step_size_input"
+            )
+            model_name = st.text_input(
+                "Model Name",
+                value=st.session_state.model_name,
+                key="model_name_input"
+            )
+
+            st.markdown("Enter the names of the instances to rotate in the given format:")
+            instance_list_input = st.text_input(
+                "Instances (comma-separated)",
+                placeholder="e.g., PART1, PART2, PART3",
+                value=", ".join(st.session_state.instance_list),
+                key="instance_list_input"
+            )
+            instance_list = tuple(i.strip() for i in instance_list_input.split(",") if i.strip())
+            if instance_list and st.button("check instance_list", key="check_instance_list_button"):
+                st.write(instance_list)
+
+            st.markdown("Enter the Axis Points (points on the axis of rotation):")
+            axis_point_x = st.number_input(
+                "Axis Point X",
+                format="%.6f",
+                value=st.session_state.axis_point[0],
+                key="axis_point_x_input"
+            )
+            axis_point_y = st.number_input(
+                "Axis Point Y",
+                format="%.6f",
+                value=st.session_state.axis_point[1],
+                key="axis_point_y_input"
+            )
+            axis_point_z = st.number_input(
+                "Axis Point Z",
+                format="%.6f",
+                value=st.session_state.axis_point[2],
+                key="axis_point_z_input"
+            )
+            axis_point = (axis_point_x, axis_point_y, axis_point_z)
+            if st.button("check axis_point", key="check_axis_point_button"):
+                st.write(axis_point)
+
+            st.markdown("Enter the Axis Direction (direction vector of the rotation axis):")
+            axis_dir_x = st.number_input(
+                "Axis Direction X",
+                format="%.6f",
+                value=st.session_state.axis_direction[0],
+                key="axis_dir_x_input"
+            )
+            axis_dir_y = st.number_input(
+                "Axis Direction Y",
+                format="%.6f",
+                value=st.session_state.axis_direction[1],
+                key="axis_dir_y_input"
+            )
+            axis_dir_z = st.number_input(
+                "Axis Direction Z",
+                format="%.6f",
+                value=st.session_state.axis_direction[2],
+                key="axis_dir_z_input"
+            )
+            axis_direction = (axis_dir_x, axis_dir_y, axis_dir_z)
+            if st.button("check axis_direction", key="check_axis_direction_button"):
+                st.write(axis_direction)
+
+            drop_axis = st.selectbox(
+                "Drop Axis (for clearance)",
+                options=["x", "y", "z"],
+                index=["x", "y", "z"].index(st.session_state.drop_axis),
+                key="drop_axis_input"
+            )
+            floor_instance_name = st.text_input(
+                "Floor Instance Name",
+                value=st.session_state.floor_instance_name,
+                key="floor_instance_name_input"
+            )
+            
+            st.session_state.inp_file_path = inp_file_path
+            st.session_state.start_angle = start_angle
+            st.session_state.final_angle = final_angle
+            st.session_state.step_size = step_size
+            st.session_state.model_name = model_name
+            st.session_state.instance_list = instance_list
+            st.session_state.axis_point = axis_point
+            st.session_state.axis_direction = axis_direction
+            st.session_state.drop_axis = drop_axis
+            st.session_state.floor_instance_name = floor_instance_name  
+
+            return { 
+                "inp_file_path": inp_file_path,
+                "start_angle": start_angle,
+                "final_angle": final_angle,
+                "step_size": step_size,
+                "model_name": model_name,
+                "instance_list": instance_list,
+                "axis_point": axis_point,
+                "axis_direction": axis_direction,
+                "drop_axis": drop_axis,
+                "floor_instance_name": floor_instance_name
+            } 
+        
+        except Exception as e: 
+            raise e
+
+
+
+
+
+    
+
+    def generate_inp_scripts_task(self, start_angle: int, final_angle: int, step_size: int, inp_file_location: str, model_name: str, instance_list: tuple[str, ...], axis_point: tuple[float, ...], axis_direction: tuple[float, ...], drop_axis: str, floor_instance_name: str):
+        """
+        Automates the generation of Abaqus input files (.inp) by dynamically creating and executing a Python script 
+        that performs rotational transformations and clearance validation on specified model instances.
+
+        This function enables parametric simulation setups by rotating model instances from a given start angle 
+        to a final angle in specified step increments, generating a unique input file for each configuration. 
+        For each angle, it ensures a minimum clearance (0.01 units) from a designated floor instance along a specified axis 
+        by calculating and applying corrective translations. Once the desired configuration is achieved, an Abaqus input file 
+        is generated and the model is reset to its original state, allowing for batch simulation and design space exploration.
+
+        Designed as a tool for Agentic AI workflows, this function supports intelligent automation in simulation pipelines, 
+        making it ideal for iterative optimization, clearance analysis, and virtual prototyping tasks.
+
+        Args:
+            start_angle (int): Starting angle (in degrees) for rotation about the specified axis.
+            final_angle (int): Final angle (in degrees) for the rotation loop (exclusive).
+            step (int): Step size (in degrees) for each rotation increment.
+            inp_file_location (str): Path to the original Abaqus .inp file used to load the model.
+            model_name (str): Name to assign to the Abaqus model created from the .inp file.
+            instance_list (tuple[str, ...]): Tuple of instance names (e.g., parts or assemblies) to rotate and analyze.
+            axis_point (tuple[float, float, float]): A point on the axis of rotation.
+            axis_direction (tuple[float, float, float]): Direction vector of the axis of rotation.
+            drop_axis (str): Axis ("x", "y", or "z") along which to compute and adjust vertical clearance from the floor.
+            floor_instance_name (str): Name of the floor instance used as a reference for clearance calculations.
+
+        Behavior:
+            - Rotates the given instances incrementally within the specified angle range.
+            - Checks clearance between each rotated instance and the floor instance.
+            - Translates the rotated assembly to maintain a minimum clearance of 0.01 units.
+            - Generates an input file (.inp) for each configuration using Abaqus.
+            - Restores the original orientation and position after each input file is created.
+
+        Example:
+            generate_inp_scripts(
+                start_angle=0,
+                final_angle=90,
+                step=15,
+                inp_file_location="C:/models/car_assembly.inp",
+                model_name="CarAssemblyModel",
+                instance_list=("Wheel1", "Wheel2", "Chassis"),
+                axis_point=(0.0, 0.0, 0.0),
+                axis_direction=(0.0, 1.0, 0.0),
+                drop_axis="z",
+                floor_instance_name="GroundPlane"
+            )
+        """
+
+        import textwrap  
+        import os
+        import subprocess  
+
+        base_dir = os.path.abspath(r"C:\Users\v-sisubraman\Documents\Perfect_Environment\Agentic_AI\Abaqus_CAE_Cockpit\Productionized_App_v1\Abaqus_Environment")
+        executions_dir = os.path.join(base_dir, "Executions")
+        results_dir = os.path.join(base_dir, "Results")
+
+        os.makedirs(executions_dir, exist_ok=True)
+        os.makedirs(results_dir, exist_ok=True)
+
+        script_path = os.path.join(executions_dir, "input_file_generation.py")
+        
+        code = textwrap.dedent(f"""
+        # -*- coding: mbcs -*-
+        from abaqus import *
+        from abaqusConstants import *
+        import __main__
+        import section
+        import regionToolset
+        import displayGroupMdbToolset as dgm
+        import part
+        import material
+        import assembly
+        import step
+        import interaction
+        import load
+        import mesh
+        import optimization
+        import job
+        import sketch
+        import visualization
+        import xyPlot
+        import displayGroupOdbToolset as dgo
+        import connectorBehavior
+        
+        os.chdir(r"{results_dir}")
+
+        inp_file = r"{inp_file_location}" 
+
+        model_name = "{model_name}"  
+        mdb.ModelFromInputFile(name=model_name, inputFileName=inp_file)
+
+        instance_list = {instance_list}
+        floor_instance = "{floor_instance_name}"
+
+        axis_point = {axis_point}
+        axis_dir = {axis_direction}  
+
+        start_angle = {start_angle}
+        final_angle = {final_angle}
+        step = {step_size}
+
+        clearance_info_partwise={{}} 
+        clearance_info_total={{}}
+
+
+
+        def get_bounds(inst_name, assembly):
+            a = assembly
+            instance = a.instances[inst_name]
+            if not instance.nodes:
+                raise ValueError(f"Instance '{{inst_name}}' has no nodes. Ensure the instance is meshed.")
+
+            z_coords = [node.coordinates[2] for node in instance.nodes]  
+            y_coords = [node.coordinates[1] for node in instance.nodes] 
+            x_coords = [node.coordinates[0] for node in instance.nodes]
+
+
+            if not z_coords:
+                raise ValueError(f"Instance '{{inst_name}}' has no valid z node coordinates.") 
+
+            if not y_coords:
+                raise ValueError(f"Instance '{{inst_name}}' has no valid y node coordinates.") 
+
+            if not x_coords:
+                raise ValueError(f"Instance '{{inst_name}}' has no valid x node coordinates.")
+
+            z_min = min(z_coords)
+            z_max = max(z_coords) 
+            y_min = min(y_coords)
+            y_max = max(y_coords) 
+            x_min = min(x_coords)
+            x_max = max(x_coords)
+            return z_min, z_max, y_min, y_max, x_min, x_max
+
+
+
+
+        if __name__ =="__main__": 
+
+            drop_axis = "{drop_axis}"
+            for angle in range(start_angle, final_angle, step): 
+                job_name = f"e2_{{angle}}"
+                a = mdb.models[model_name].rootAssembly
+            
+                a.rotate(instanceList=instance_list, axisPoint=axis_point, axisDirection=axis_dir, angle=float(angle))
+
+
+                try: 
+                    
+                    floor_low_z, floor_high_z, floor_low_y, floor_high_y, floor_low_x, floor_high_x = get_bounds(floor_instance, assembly= a )
+                    print(f"FLOOR bounds: low(z)={{floor_low_z:.3f}}, high(z)={{floor_high_z:.3f}},    low(y)={{floor_low_y:.3f}}, high(y)={{floor_high_y:.3f}},    low(x)={{floor_low_x:.3f}}, high(x)={{floor_high_x:.3f}}")
+
+                    
+                    for inst in instance_list:
+                        part_low_z, part_high_z, part_low_y, part_high_y, part_low_x, part_high_x = get_bounds(inst, assembly=a)
+                        distance_above_z = part_low_z - floor_high_z
+                        distance_below_z = floor_low_z - part_high_z
+                        distance_above_y = part_low_y - floor_high_y
+                        distance_below_y = floor_low_y - part_high_y
+                        distance_above_x = part_low_x - floor_high_x
+                        distance_below_x = floor_low_x - part_high_x
+                        
+                        if drop_axis == "z":
+                            clearance = min(abs(distance_above_z), abs(distance_below_z)) 
+                            if abs(distance_above_z) < abs(distance_below_z):  
+                                clearance_info_partwise[inst]= {{"clearance": clearance, "clearance_type": "above"}}
+
+                            else:
+                                clearance_info_partwise[inst]= {{"clearance": clearance, "clearance_type": "below"}}
+
+                        
+                        elif drop_axis == "y":
+                            clearance = min(abs(distance_above_y), abs(distance_below_y)) 
+                            if abs(distance_above_y) < abs(distance_below_y):  
+                                clearance_info_partwise[inst]= {{"clearance": clearance, "clearance_type": "above"}}
+
+                            else:
+                                clearance_info_partwise[inst]= {{"clearance": clearance, "clearance_type": "below"}} 
+
+                        
+                        if drop_axis == "x":
+                            clearance = min(abs(distance_above_x), abs(distance_below_x)) 
+                            if abs(distance_above_x) < abs(distance_below_x):  
+                                clearance_info_partwise[inst]= {{"clearance": clearance, "clearance_type": "above"}}
+
+                            else:
+                                clearance_info_partwise[inst]= {{"clearance": clearance, "clearance_type": "below"}}
+
+                            
+                    
+                    
+                    min_clearance = 1000
+                    for part, clearance_properties in clearance_info_partwise.items(): 
+                        if clearance_properties["clearance"] < min_clearance: 
+                            min_clearance = clearance_properties["clearance"] 
+                            min_clearance_part = part  
+                            min_clearance_type = clearance_properties["clearance_type"] 
+
+                    
+                    clearance_info_total["Part"] = min_clearance_part 
+                    clearance_info_total["Clearance"] = min_clearance 
+                    clearance_info_total["Clearance Type"] = min_clearance_type
+                    
+                    
+                            
+                
+                    if clearance_info_total["Clearance"] > 0.01: 
+                        if clearance_info_total["Clearance Type"] == "above":   
+                            if drop_axis == "y": 
+                                y_translation = clearance_info_total["Clearance"] - 0.01 
+                                print(-y_translation)
+                                translation_vector = (0.0, -y_translation, 0.0)
+                                a.translate(instanceList=instance_list, vector=translation_vector)
+                    
+                            
+                            if drop_axis == "z": 
+                                z_translation = clearance_info_total["Clearance"] - 0.01
+                                translation_vector = (0.0, 0.0, -z_translation)
+                                a.translate(instanceList=instance_list, vector=translation_vector)
+
+                            if drop_axis == "x": 
+                                x_translation = clearance_info_total["Clearance"] - 0.01
+                                translation_vector = (-x_translation, 0.0, 0.0)
+                                a.translate(instanceList=instance_list, vector=translation_vector)
+
+                        if clearance_info_total["Clearance Type"] == "below": 
+                            if drop_axis == "y": 
+                                y_translation = clearance_info_total["Clearance"] - 0.01
+                                translation_vector = (0.0, y_translation, 0.0)
+                                a.translate(instanceList=instance_list, vector=translation_vector)
+                            
+                            if drop_axis == "z": 
+                                z_translation = clearance_info_total["Clearance"] - 0.01
+                                translation_vector = (0.0, 0.0, z_translation)
+                                a.translate(instanceList=instance_list, vector=translation_vector)
+
+                            if drop_axis == "x": 
+                                x_translation = clearance_info_total["Clearance"] - 0.01
+                                translation_vector = (x_translation, 0.0, 0.0)
+                                a.translate(instanceList=instance_list, vector=translation_vector)
+                
+                        print("Corrected the clearance... Current clearance = 0.01")
+
+                
+                    mdb.Job(
+                        name=job_name, model=model_name, description='', type=ANALYSIS,
+                        atTime=None, waitMinutes=0, waitHours=0, queue=None, memory=90,
+                        memoryUnits=PERCENTAGE, explicitPrecision=SINGLE,
+                        nodalOutputPrecision=SINGLE, echoPrint=OFF, modelPrint=OFF,
+                        contactPrint=OFF, historyPrint=OFF, userSubroutine='', scratch='',
+                        resultsFormat=ODB, numDomains=1, activateLoadBalancing=False,
+                        numThreadsPerMpiProcess=1, multiprocessingMode=DEFAULT, numCpus=1
+                    )
+
+
+                    mdb.jobs[job_name].writeInput(consistencyChecking=OFF)
+                    
+                    print(translation_vector)
+                    neg_translation_vector = tuple(-x for x in translation_vector) 
+                    print(neg_translation_vector) 
+
+                    a.translate(instanceList=instance_list, vector=neg_translation_vector)
+                    a.rotate(instanceList=instance_list, axisPoint=axis_point, axisDirection=axis_dir, angle=float(-angle))
+                
+
+                except Exception as e:
+                    a.rotate(instanceList=instance_list, axisPoint=axis_point, axisDirection=axis_dir, angle=float(-angle))
+                    a.regenerate()
+                    raise e
+                    continue
+        """) 
+
+        with open(script_path, "w") as file: 
+            file.write(code)    
+        print(f"\nPython script successfully created at: {script_path}\n") 
+
+        working_dir = r"C:\Users\v-sisubraman\Documents\Perfect_Environment\Agentic_AI\Abaqus_CAE_Cockpit\Productionized_App_v1\Abaqus_Environment\Executions"
+        abaqus_command = ["abaqus", "cae", "noGUI=input_file_generation.py"]
+        subprocess.run(abaqus_command, cwd=working_dir, check=True, capture_output=True, text=True, shell=True) 
+
+
+
+
+
+
+
+
+
+    def ask_cad2mesh_assembly_inputs(self)-> dict: 
+        if "stp_file_path" not in st.session_state: 
+            st.session_state.stp_file_path = ""
+        if "mesh_size" not in st.session_state:
+            st.session_state.mesh_size = 1.0
+        if "model_name" not in st.session_state:
+            st.session_state.model_name = ""
+        if "element_type" not in st.session_state:
+            st.session_state.element_type = ""
+
+        st.info("This is for an assembly file with multiple parts. If you have a single part file, please use the Single Part option instead.")
+
+        stp_file_path= st.text_input(
+            "Step File Location (e.g., path/to/file.stp or .step)",
+            value=st.session_state.stp_file_path
+        ) 
+        mesh_size = st.number_input(
+            "Mesh Size",
+            step=0.1,
+            format="%.1f",
+            value=st.session_state.mesh_size,
+            key="mesh_size_input"
+        )
+        model_name = st.text_input(
+            "Model Name",
+            value=st.session_state.model_name,
+            key="model_name_input"
+        )
+        element_type = st.text_input(
+            "Element Type",
+            value=st.session_state.element_type,
+            key="element_type_input"
+        )   
+
+        st.session_state.stp_file_path = stp_file_path
+        st.session_state.mesh_size = mesh_size
+        st.session_state.model_name = model_name
+        st.session_state.element_type = element_type
+
+        return {
+            "stp_file_path": stp_file_path,
+            "mesh_size": mesh_size,
+            "model_name": model_name,
+            "element_type": element_type
+        }
+
+
+
+
+    def cad_to_mesh_assembly_task(self, step_file_path: str, model_name: str, mesh_size: float, element_type: str):
+        """
+        Automates the process of importing an assembly from a STEP file into Abaqus/CAE, meshing all valid parts, and saving the model.
+
+        This function is specifically designed for STEP files that represent mechanical assemblies (i.e., multiple parts).
+        It handles part import, mesh generation (both 2D and 3D depending on geometry), and saves the resulting .cae model.
+        
+        Parameters:
+            step_file_path (str): Absolute path to the STEP (.stp/.step) file containing the assembly.
+            model_name (str): Name of the Abaqus model to create within the CAE environment.
+            mesh_size (float): Global seed size to control the mesh resolution.
+            element_type (str): Element type for meshing. Examples include:
+                                - 'C3D10' for 3D tetrahedral elements
+                                - 'C3D4' for linear 3D tetrahedral elements
+                                - 'S4R' for shell (2D) elements
+            
+        Behavior:
+            - Detects and counts all bodies in the STEP file.
+            - Imports each part individually and adds it to the model.
+            - Filters parts with usable geometry (faces or cells).
+            - Creates instances in the assembly and applies appropriate meshing strategies.
+            - Automatically selects meshing technique based on geometry type (2D or 3D).
+            - Applies relevant element types.
+            - Saves the final model as a .cae file in a predefined Results directory.
+            - Logs the import and meshing process, including any failures.
+        
+        Output:
+            - Saves the meshed Abaqus model as a .cae file in the "Results" directory under the predefined base environment.
+
+        Note:
+            This function is not intended for single-part STEP files. Use a dedicated single-part meshing script in such cases.
+        """
+        
+        import os
+        import subprocess
+        import textwrap
+
+
+        base_dir = "C:/Users/v-sisubraman/Documents/Perfect_Environment/Agentic_AI/Abaqus_CAE_Cockpit/App_v2/Abaqus_Environment"
+
+        executions_dir = os.path.join(base_dir, "Executions")
+        results_dir = os.path.join(base_dir, "Results")
+
+        os.makedirs(executions_dir, exist_ok=True)
+        os.makedirs(results_dir, exist_ok=True)
+
+        script_dir = executions_dir
+        script_path = os.path.join(script_dir, "CAD2Mesh_Assembly.py") 
+
+
+        code=textwrap.dedent(f"""
+        # -*- coding: mbcs -*-
+        from abaqus import *
+        from abaqusConstants import *
+        import part, material, assembly, step, mesh
+        import section, regionToolset
+        import os
+
+
+        step_file_path = r"{step_file_path}"
+        model_name = "{model_name}"
+        mesh_size = {mesh_size}
+        element_type = "{element_type}"
+        cae_file_path = os.path.join("{results_dir}", "meshed_assembly.cae") 
+        cae_file_path = os.path.normpath(cae_file_path)  
+
+
+        print("AUTOMATIC STEP FILE IMPORT")
+
+
+        step_geometry = mdb.openStep(fileName=step_file_path)
+        num_parts_in_file = step_geometry.numberOfParts
+        print("STEP file contains: %d parts" % num_parts_in_file)
+
+
+        if model_name in mdb.models:
+            del mdb.models[model_name]
+        mdb.Model(name=model_name)
+        model = mdb.models[model_name]
+        print("Created model: %s" % model_name)
+
+
+        print("Importing parts...")
+        imported_parts = []
+        failed_imports = []
+
+        for i in range(1, num_parts_in_file + 1):
+            try:
+                part_name = "Part_%d" % i
+                model.PartFromGeometryFile(
+                    name=part_name,
+                    geometryFile=step_geometry,
+                    bodyNum=i,
+                    combine=False,
+                    dimensionality=THREE_D,
+                    type=DEFORMABLE_BODY,
+                    scale=1.0
+                )
+                imported_parts.append(part_name)
+                print("Imported: %s" % part_name)
+
+            except Exception as e:
+                failed_imports.append(i)
+                print("Failed Part %d: %s" % (i, str(e)))
+
+        print("Successfully imported: %d parts" % len(imported_parts))
+
+
+        valid_parts = []
+        for part_name in imported_parts:
+            part_obj = model.parts[part_name]
+            num_cells = len(part_obj.cells)
+            num_faces = len(part_obj.faces)
+
+            if num_cells > 0 or num_faces > 0:
+                valid_parts.append(part_name)
+
+        print("Valid parts for meshing: %d" % len(valid_parts))
+
+
+        print("Creating assembly...")
+        assembly = model.rootAssembly
+
+        created_instances = []
+        for part_name in valid_parts:
+            try:
+                instance_name = "%s_Instance" % part_name
+                assembly.Instance(
+                    name=instance_name,
+                    part=model.parts[part_name],
+                    dependent=OFF 
+                )
+                created_instances.append(instance_name)
+                print("Created instance: %s" % instance_name)
+            except Exception as e:
+                print("Failed instance %s: %s" % (part_name, str(e)))
+
+
+        print("Meshing at assembly level...")
+        meshed_instances = []
+        total_elements = 0
+        total_nodes = 0
+
+        for instance_name in created_instances:
+            try:
+                instance = assembly.instances[instance_name]
+
+
+                assembly.seedPartInstance(
+                    regions=(instance,),
+                    size=mesh_size,
+                    deviationFactor=0.1,
+                    minSizeFactor=0.1
+                )
+
+            
+                cells = instance.cells
+                if len(cells) > 0:
+                    assembly.setMeshControls(
+                        regions=cells,
+                        technique=FREE,
+                        elemShape=TET
+                    )
+
+                    if element_type == "C3D10":
+                        elem_type = mesh.ElemType(elemCode=C3D10, elemLibrary=STANDARD)
+                    elif element_type == "C3D4":
+                        elem_type = mesh.ElemType(elemCode=C3D4, elemLibrary=STANDARD)
+                    else:
+                        elem_type = mesh.ElemType(elemCode=C3D10, elemLibrary=STANDARD)
+
+                    region = regionToolset.Region(cells=cells)
+                    assembly.setElementType(regions=region, elemTypes=(elem_type,))
+
+                
+                assembly.generateMesh(regions=(instance,)) 
+
+
+                elements = len(instance.elements)
+                nodes = len(instance.nodes)
+
+                print("Meshed %s: %d elements, %d nodes" % (instance_name, elements, nodes))
+
+                meshed_instances.append(instance_name)
+                total_elements += elements
+                total_nodes += nodes
+
+            except Exception as e:
+                print("Meshing error on instance %s: %s" % (instance_name, str(e)))
+
+
+        print("Saving model...")
+        try:
+            mdb.saveAs(pathName=cae_file_path)
+            print("Saved: %s" % cae_file_path)
+        except Exception as e:
+            print("Save error: %s" % str(e))
+
+
+        print("SUMMARY")
+        print("Parts detected: %d" % num_parts_in_file)
+        print("Parts imported: %d" % len(imported_parts))
+        print("Instances meshed: %d" % len(meshed_instances))
+        print("Total elements: %d" % total_elements)
+        print("Total nodes: %d" % total_nodes)
+
+        if len(meshed_instances) == len(valid_parts):
+            print("SUCCESS: All %d instances meshed at assembly level" % len(valid_parts))
+        else:
+            print("Partial success: %d/%d instances meshed" % (len(meshed_instances), len(valid_parts)))
+        """) 
+
+        with open(script_path, "w") as file: 
+            file.write(code) 
+
+        print(f"\nPython script successfully created at: {script_path}\n")
+        
+        working_dir = os.path.normpath(executions_dir)
+        abaqus_command = ["abaqus", "cae", f"noGUI=CAD2Mesh_Assembly.py"]
+        subprocess.run(abaqus_command, cwd=working_dir, check=True, capture_output=True, text=True, shell=True)
+        
+
+
+
+
+
+
+
+
+
+
+    def ask_cad2mesh_inputs(self)-> dict: 
+        if "stp_file_path" not in st.session_state: 
+            st.session_state.stp_file_path = ""
+        if "mesh_size" not in st.session_state:
+            st.session_state.mesh_size = 1.0
+        if "model_name" not in st.session_state:
+            st.session_state.model_name = ""
+        if "part_name" not in st.session_state:
+            st.session_state.part_name = ""
+        if "element_type" not in st.session_state:
+            st.session_state.element_type = "" 
+
+        st.info("This is for a single part file. If you have an assembly, please use the Assembly option instead.")
+
+        stp_file_path= st.text_input(
+            "Step File Location (e.g., path/to/file.stp or .step)",
+            value=st.session_state.stp_file_path
+        ) 
+        mesh_size = st.number_input(
+            "Mesh Size",
+            step=0.1,
+            format="%.1f",
+            value=st.session_state.mesh_size,
+            key="mesh_size_input"
+        )
+        model_name = st.text_input(
+            "Model Name",
+            value=st.session_state.model_name,
+            key="model_name_input"
+        )
+        part_name = st.text_input(
+            "Part Name",
+            value=st.session_state.part_name,
+            key="part_name_input"
+        )
+        element_type = st.text_input(
+            "Element Type",
+            value=st.session_state.element_type,
+            key="element_type_input"
+        )   
+
+        st.session_state.stp_file_path = stp_file_path
+        st.session_state.mesh_size = mesh_size
+        st.session_state.model_name = model_name
+        st.session_state.part_name = part_name
+        st.session_state.element_type = element_type
+
+        return {
+            "stp_file_path": stp_file_path,
+            "mesh_size": mesh_size,
+            "model_name": model_name,
+            "part_name": part_name,
+            "element_type": element_type
+        }
+
+
+
+
+    def cad_to_mesh_task(self, step_file_path: str, model_name: str, part_name: str, mesh_size: float, element_type: str): 
+        """
+        Automates the CAD-to-mesh conversion process using Abaqus CAE in noGUI mode. This is only for a single part file 
+
+        This function dynamically generates and executes an Abaqus Python script that:
+        1. Imports a 3D STEP file into a new Abaqus model.
+        2. Creates a part from the geometry and assigns mesh controls.
+        3. Applies meshing using either C3D10 (quadratic tetrahedron) or C3D4 (linear tetrahedron) elements.
+        4. Saves the generated mesh and model to a .cae file for further simulation.
+
+        Additionally, the function manages the execution environment by organizing scripts and results into structured directories.
+
+        Parameters:
+            step_file_path (str): Absolute path to the STEP (.step/.stp) file to be imported.
+            model_name (str): Name to assign to the Abaqus model.
+            part_name (str): Name to assign to the part created from the STEP geometry.
+            mesh_size (float): Approximate global size of mesh elements.
+            element_type (str): Element type for meshing, either 'C3D10' or 'C3D4'.
+
+        Example:
+            cad_to_mesh(
+                step_file_path="C:/path/to/file.step",
+                model_name="TestModel",
+                part_name="Bracket",
+                mesh_size=10.0,
+                element_type="C3D10"
+            )
+        """
+        
+        import os
+        import subprocess
+        import textwrap 
+
+        base_dir = "C:/Users/v-sisubraman/Documents/Perfect_Environment/Agentic_AI/Abaqus_CAE_Cockpit/App_v2/Abaqus_Environment"
+
+        executions_dir = os.path.join(base_dir, "Executions")
+        results_dir = os.path.join(base_dir, "Results")
+
+        os.makedirs(executions_dir, exist_ok=True)
+        os.makedirs(results_dir, exist_ok=True)
+
+        script_dir = executions_dir
+        script_path = os.path.join(script_dir, "CAD2Mesh.py") 
+
+
+        
+        code =textwrap.dedent(f"""
+        # -*- coding: mbcs -*-
+        from abaqus import *
+        from abaqusConstants import *
+        import part, material, assembly, step, mesh
+        import section, regionToolset
+        import os
+
+
+        step_file_path = r"{step_file_path}"
+        model_name = "{model_name}"
+        part_name = "{part_name}"
+        mesh_size = {mesh_size}
+        element_type = "{element_type}"
+
+
+        step_file_path = os.path.normpath(step_file_path)  
+
+
+        if model_name not in mdb.models:  
+            mdb.Model(name=model_name)
+
+
+        try:
+            step_geometry = mdb.openStep(fileName=step_file_path)
+            mdb.models[model_name].PartFromGeometryFile(
+                name=part_name,
+                geometryFile=step_geometry,
+                combine=False,
+                dimensionality=THREE_D,
+                type=DEFORMABLE_BODY,
+                scale=1.0
+            )
+            print("STEP file imported successfully.")
+
+        except Exception as e:
+            print(f"Error importing STEP file: {{e}}")
+
+
+
+        try:
+            part_obj = mdb.models[model_name].parts[part_name]
+
+            
+            if not part_obj.cells:
+                raise ValueError("No valid cells found in the imported geometry.")
+
+            
+            part_obj.seedPart(size=mesh_size, deviationFactor=0.1, minSizeFactor=0.1)
+
+            
+            part_obj.setMeshControls(regions=part_obj.cells, technique=FREE, elemShape=TET)
+
+            
+            if element_type == 'C3D10':
+                elem_type = mesh.ElemType(elemCode=C3D10, elemLibrary=STANDARD)
+            elif element_type == 'C3D4':
+                elem_type = mesh.ElemType(elemCode=C3D4, elemLibrary=STANDARD)
+            else:
+                raise ValueError(f"Unsupported element type: {{element_type}}")
+
+            all_cells = part_obj.cells
+            region = (all_cells,)
+            part_obj.setElementType(regions=region, elemTypes=(elem_type,))
+
+            
+            part_obj.generateMesh()
+            print("Mesh generated successfully.")
+
+
+        except Exception as e:
+            print(f" Error during meshing: {{e}}")
+            raise
+
+
+
+
+        try: 
+            cae_file_path = os.path.join("{results_dir}", f"{{part_name}}.cae")
+            #cae_file_path = f'C:/Users/v-sisubraman/Documents/Perfect_Environment/Agentic_AI/Abaqus_CAE_Cockpit/Abaqus Scripts/{{part_name}}.cae'
+            cae_file_path = os.path.normpath(cae_file_path)
+            mdb.saveAs(pathName=cae_file_path)
+            print(f"CAE file created and saved successfully to {{cae_file_path}}.")
+
+        except Exception as e: 
+            print(f"Error saving .cae file: {{e}}")
+        """) 
+        
+
+        with open(script_path, "w") as file: 
+            file.write(code) 
+
+        print(f"\nPython script successfully created at: {script_path}\n")
+        
+        working_dir = os.path.normpath(executions_dir)
+        abaqus_command = ["abaqus", "cae", f"noGUI=CAD2Mesh.py"]
+        subprocess.run(abaqus_command, cwd=working_dir, check=True, capture_output=True, text=True, shell=True)

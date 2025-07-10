@@ -22,7 +22,7 @@ class CAETaskNode:
             tool_calls = msg.additional_kwargs["tool_calls"]
             for call in tool_calls:
                 function_name = call["function"]["name"]
-                print("Tool function name:", function_name)
+                #print("Tool function name:", function_name)
         
         updated_tool_called = state.get("tool_called", []).copy()
         if tool_flag:
@@ -30,7 +30,7 @@ class CAETaskNode:
             return {"messages": [msg], "tool_called": updated_tool_called}   
 
         else:  
-            print(updated_tool_called)
+            #print(updated_tool_called)
             return {"messages": [msg], "tool_called": updated_tool_called}   
 
 

@@ -29,11 +29,15 @@ def load_cae_engine():
             display_obj = DisplayResultStreamlit(usecase) 
             if st.session_state["intro_message_count"] == 0:
                 display_obj.display_intro_message(llm_with_tools = model_with_tools) 
-                st.session_state["intro_message_count"] = 1
+            st.session_state["intro_message_count"] +=1
 
 
 
             user_message = st.chat_input("Enter your query here")   
+            
+            if st.session_state["intro_message_count"] > 1:
+                display_obj.display_chat_history()
+            
             if user_message:       
                 try: 
                     graph_builder = GraphBuilder(model_with_tools = model_with_tools)  
@@ -41,10 +45,11 @@ def load_cae_engine():
                 except Exception as e: 
                     raise e 
                     return   
-                
-                display_obj.display_result(graph = graph, user_message = user_message) 
-                
+                    
+                display_obj.display_result(graph = graph, user_message = user_message)   
+            display_obj.execute_tasks()
 
+            
                 
 
         except Exception as e:  
@@ -60,8 +65,7 @@ def load_cae_engine():
 
                 
 
-        except Exception as e: 
-            raise ValueError(f"{e}")
+        
 
             
 

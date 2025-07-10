@@ -13,7 +13,7 @@ class Tools:
         parametric simulations involving rotational transformations and clearance validation. 
         This tool does not ask user input. It just calls the other tool where the user input will be required. 
         Execute this tool whenever user wants to create/generate input files. Also display the message that the 
-        process has started...
+        process has started only after executing this and nothing before executing this...
         """
         pass  
 
