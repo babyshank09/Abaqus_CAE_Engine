@@ -6,9 +6,10 @@ from src.cae_engine_agentic_ai.tasks.tasks import Tasks
 
 
 class DisplayResultStreamlit:
-    def __init__(self, usecase):
-        self.usecase = usecase  
-        self.tasks = Tasks()    
+    def __init__(self, usecase, working_dir):
+        self.usecase = usecase   
+        self.working_dir = working_dir
+        self.tasks = Tasks(working_dir = self.working_dir)    
 
 
     def display_intro_message(self, llm_with_tools):  
@@ -80,6 +81,8 @@ class DisplayResultStreamlit:
 
 
         elif "cad_to_mesh_assembly" in st.session_state.response["tool_called"]:  
+
+            st.header("Assembly Mesh Builder 🛠️")
             results = self.tasks.ask_cad2mesh_assembly_inputs() 
 
             if st.button("Submit Values"):
@@ -95,6 +98,8 @@ class DisplayResultStreamlit:
 
                 
         elif "cad_to_mesh" in st.session_state.response["tool_called"]: 
+
+            st.header("Part Mesh Builder 🛠️")
             results = self.tasks.ask_cad2mesh_inputs() 
 
             if st.button("Submit Values"):

@@ -12,7 +12,7 @@ class LoadStreamlitUI:
 
     def load_ui(self): 
         st.set_page_config(page_title = self.config.get_title(), page_icon = self.config.get_icon()) 
-        st.title(self.config.get_title() + " " + self.config.get_icon())   
+        st.title(self.config.get_icon() + " " + self.config.get_title())   
 
         with st.sidebar:    
             st.title("Settings") 

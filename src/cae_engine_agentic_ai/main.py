@@ -9,7 +9,7 @@ def load_cae_engine():
     load_streamlit_ui = LoadStreamlitUI()   
     user_controls = load_streamlit_ui.load_ui()  
       
-    if user_controls["OPENAI_API_KEY"] and user_controls["working_dir"] :
+    if user_controls["OPENAI_API_KEY"]:
         try:
             openai_llm_obj = OpenAILLM(user_controls_input = user_controls)  
             model = openai_llm_obj.get_llm_model()   
@@ -24,13 +24,18 @@ def load_cae_engine():
             usecase = user_controls["selected_usecase"] 
             if not usecase: 
                 st.error("Usecase is not selected")
+                return  
+            
+            working_dir = user_controls["working_dir"]  
+            if not working_dir: 
+                st.error("Enter the working directory to proceed!") 
                 return 
 
-            display_obj = DisplayResultStreamlit(usecase) 
+
+            display_obj = DisplayResultStreamlit(usecase, working_dir) 
             if st.session_state["intro_message_count"] == 0:
                 display_obj.display_intro_message(llm_with_tools = model_with_tools) 
             st.session_state["intro_message_count"] +=1
-
 
 
             user_message = st.chat_input("Enter your query here")   

@@ -4,8 +4,8 @@ import streamlit as st
 
 
 class Tasks: 
-    def __init__(self): 
-        pass 
+    def __init__(self, working_dir): 
+        self.working_dir = working_dir 
 
 
     def display_input_model(self, input_file_address: str):
@@ -16,9 +16,12 @@ class Tasks:
         import os
         import subprocess  
 
-        base_dir = os.path.abspath(r"C:\Users\v-sisubraman\Documents\Perfect_Environment\Agentic_AI\Abaqus_CAE_Cockpit\Productionized_App_v1\Abaqus_Environment")
-        executions_dir = os.path.join(base_dir, "Executions")
-        results_dir = os.path.join(base_dir, "Results")
+        base_dir = os.path.abspath(self.working_dir) 
+        #print(base_dir)
+        executions_dir = os.path.join(base_dir, "Executions") 
+        #print(executions_dir)
+        results_dir = os.path.join(base_dir, "Results") 
+        #print(results_dir)
 
         os.makedirs(executions_dir, exist_ok=True)
         os.makedirs(results_dir, exist_ok=True)
@@ -70,11 +73,12 @@ class Tasks:
         
         with open(script_path, "w") as file: 
             file.write(code)    
-        print(f"\nPython script successfully created at: {script_path}\n") 
+        #print(f"\nPython script successfully created at: {script_path}\n") 
+        
 
-        working_dir = r"C:\Users\v-sisubraman\Documents\Perfect_Environment\Agentic_AI\Abaqus_CAE_Cockpit\Productionized_App_v1\Abaqus_Environment\Executions"
+        current_working_dir = executions_dir
         abaqus_command = ["abaqus", "cae", "noGUI=display_input_model.py"]
-        subprocess.run(abaqus_command, cwd=working_dir, check=True, capture_output=True, text=True, shell=True)   
+        subprocess.run(abaqus_command, cwd=current_working_dir, check=True, capture_output=True, text=True, shell=True)   
 
         image_path = os.path.join(results_dir, "output_image.png") 
         return os.path.normpath(image_path)
@@ -107,7 +111,9 @@ class Tasks:
             if "drop_axis" not in st.session_state:
                 st.session_state.drop_axis = "y"
             if "floor_instance_name" not in st.session_state:
-                st.session_state.floor_instance_name = ""
+                st.session_state.floor_instance_name = "" 
+            if "output_image" not in st.session_state: 
+                st.session_state.output_image = ""
 
             inp_file_path= st.text_input(
                 "Input File Location (e.g., path/to/file.inp)",
@@ -119,7 +125,10 @@ class Tasks:
                     st.error("Error: Please provide a valid input file path.")
                 else:
                     image_path_abs = self.display_input_model(input_file_address=inp_file_path) 
-                    st.image(image_path_abs, caption="Current Model", use_container_width=True)
+                    st.image(image_path_abs, 
+                            caption="Current Model", 
+                            use_container_width=True,
+                            ) 
                     st.success("Model displayed successfully!")
                 
             start_angle = st.number_input(
@@ -227,7 +236,8 @@ class Tasks:
             st.session_state.axis_point = axis_point
             st.session_state.axis_direction = axis_direction
             st.session_state.drop_axis = drop_axis
-            st.session_state.floor_instance_name = floor_instance_name  
+            st.session_state.floor_instance_name = floor_instance_name   
+           
 
             return { 
                 "inp_file_path": inp_file_path,
@@ -303,7 +313,7 @@ class Tasks:
         import os
         import subprocess  
 
-        base_dir = os.path.abspath(r"C:\Users\v-sisubraman\Documents\Perfect_Environment\Agentic_AI\Abaqus_CAE_Cockpit\Productionized_App_v1\Abaqus_Environment")
+        base_dir = os.path.abspath(self.working_dir)
         executions_dir = os.path.join(base_dir, "Executions")
         results_dir = os.path.join(base_dir, "Results")
 
@@ -527,9 +537,9 @@ class Tasks:
             file.write(code)    
         print(f"\nPython script successfully created at: {script_path}\n") 
 
-        working_dir = r"C:\Users\v-sisubraman\Documents\Perfect_Environment\Agentic_AI\Abaqus_CAE_Cockpit\Productionized_App_v1\Abaqus_Environment\Executions"
+        current_working_dir = executions_dir
         abaqus_command = ["abaqus", "cae", "noGUI=input_file_generation.py"]
-        subprocess.run(abaqus_command, cwd=working_dir, check=True, capture_output=True, text=True, shell=True) 
+        subprocess.run(abaqus_command, cwd=current_working_dir, check=True, capture_output=True, text=True, shell=True) 
 
 
 
@@ -626,8 +636,7 @@ class Tasks:
         import textwrap
 
 
-        base_dir = "C:/Users/v-sisubraman/Documents/Perfect_Environment/Agentic_AI/Abaqus_CAE_Cockpit/App_v2/Abaqus_Environment"
-
+        base_dir = os.path.abspath(self.working_dir)
         executions_dir = os.path.join(base_dir, "Executions")
         results_dir = os.path.join(base_dir, "Results")
 
@@ -651,7 +660,7 @@ class Tasks:
         model_name = "{model_name}"
         mesh_size = {mesh_size}
         element_type = "{element_type}"
-        cae_file_path = os.path.join("{results_dir}", "meshed_assembly.cae") 
+        cae_file_path = os.path.join(r"{results_dir}", "meshed_assembly.cae") 
         cae_file_path = os.path.normpath(cae_file_path)  
 
 
@@ -803,11 +812,11 @@ class Tasks:
         with open(script_path, "w") as file: 
             file.write(code) 
 
-        print(f"\nPython script successfully created at: {script_path}\n")
+        #print(f"\nPython script successfully created at: {script_path}\n")
         
-        working_dir = os.path.normpath(executions_dir)
+        current_working_dir = executions_dir
         abaqus_command = ["abaqus", "cae", f"noGUI=CAD2Mesh_Assembly.py"]
-        subprocess.run(abaqus_command, cwd=working_dir, check=True, capture_output=True, text=True, shell=True)
+        subprocess.run(abaqus_command, cwd=current_working_dir, check=True, capture_output=True, text=True, shell=True)
         
 
 
@@ -910,8 +919,7 @@ class Tasks:
         import subprocess
         import textwrap 
 
-        base_dir = "C:/Users/v-sisubraman/Documents/Perfect_Environment/Agentic_AI/Abaqus_CAE_Cockpit/App_v2/Abaqus_Environment"
-
+        base_dir = os.path.abspath(self.working_dir)
         executions_dir = os.path.join(base_dir, "Executions")
         results_dir = os.path.join(base_dir, "Results")
 
@@ -1001,7 +1009,7 @@ class Tasks:
 
 
         try: 
-            cae_file_path = os.path.join("{results_dir}", f"{{part_name}}.cae")
+            cae_file_path = os.path.join(r"{results_dir}", f"{{part_name}}.cae")
             #cae_file_path = f'C:/Users/v-sisubraman/Documents/Perfect_Environment/Agentic_AI/Abaqus_CAE_Cockpit/Abaqus Scripts/{{part_name}}.cae'
             cae_file_path = os.path.normpath(cae_file_path)
             mdb.saveAs(pathName=cae_file_path)
@@ -1017,6 +1025,6 @@ class Tasks:
 
         print(f"\nPython script successfully created at: {script_path}\n")
         
-        working_dir = os.path.normpath(executions_dir)
+        current_working_dir = executions_dir
         abaqus_command = ["abaqus", "cae", f"noGUI=CAD2Mesh.py"]
-        subprocess.run(abaqus_command, cwd=working_dir, check=True, capture_output=True, text=True, shell=True)
+        subprocess.run(abaqus_command, cwd= current_working_dir, check=True, capture_output=True, text=True, shell=True)
