@@ -1,7 +1,8 @@
 import os 
 import streamlit as st  
-from langchain_openai import ChatOpenAI 
-from src.cae_engine_agentic_ai.tools.tools import Tools
+from langchain_openai import ChatOpenAI, AzureChatOpenAI
+from src.cae_engine_agentic_ai.tools.tools import Tools 
+from azure.identity import DefaultAzureCredential 
 
 class OpenAILLM():     
     def __init__(self, user_controls_input): 
@@ -23,8 +24,8 @@ class OpenAILLM():
         except Exception as e: 
             raise ValueError(f"{e}") 
         
-        return llm  
-    
+        return llm 
+
 
     def get_llm_with_tools(self): 
         try:   

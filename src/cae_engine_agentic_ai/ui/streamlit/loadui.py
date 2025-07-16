@@ -31,7 +31,7 @@ class LoadStreamlitUI:
 
                 self.user_controls["OPENAI_API_KEY"] = st.text_input("OpenAI API Key", type="password") 
                 if not self.user_controls["OPENAI_API_KEY"]:
-                    st.warning("⚠️ Please enter your OpenAI API key to proceed!")  
+                     st.warning("⚠️ Please enter your OpenAI API key to proceed!")  
 
             clear_session = st.button("Clear Session") 
 
