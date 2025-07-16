@@ -1027,4 +1027,242 @@ class Tasks:
         
         current_working_dir = executions_dir
         abaqus_command = ["abaqus", "cae", f"noGUI=CAD2Mesh.py"]
-        subprocess.run(abaqus_command, cwd= current_working_dir, check=True, capture_output=True, text=True, shell=True)
+        subprocess.run(abaqus_command, cwd= current_working_dir, check=True, capture_output=True, text=True, shell=True) 
+
+
+    
+
+
+
+
+
+    def ask_analyse_all_parts_inputs(self)-> dict: 
+        if "odb_file_path" not in st.session_state: 
+            st.session_state.odb_file_path = ""
+
+        st.info("This is for analysing all the instances and elsets in the odb file. If you want to analyse a given elset in an instance, please switch to the analyse single part option instead.")
+
+        odb_file_path= st.text_input(
+            "ODB File Location (e.g., path/to/file.odb)",
+            value=st.session_state.odb_file_path
+        ) 
+      
+        st.session_state.stp_file_path = odb_file_path  
+
+        return {
+            "odb_file_path": odb_file_path,
+        }
+    
+
+
+    def analyse_all_parts_task(self, odb_path):
+        import os
+        import subprocess
+        import textwrap 
+
+        base_dir = os.path.abspath(self.working_dir)
+        executions_dir = os.path.join(base_dir, "Executions")
+        results_dir = os.path.join(base_dir, "Results")
+
+        os.makedirs(executions_dir, exist_ok=True)
+        os.makedirs(results_dir, exist_ok=True)
+
+        script_dir = executions_dir
+        script_path = os.path.join(script_dir, "analyse_all_parts.py") 
+
+
+        
+        code =textwrap.dedent(f"""
+        # -*- coding: mbcs -*-
+        from abaqus import *
+        from odbAccess import *
+        import pandas as pd
+        from abaqusConstants import *
+        import odbAccess  
+        from odbAccess import openOdb 
+        import math 
+        from collections import defaultdict 
+        import os 
+
+        class AnalyseAllParts: 
+            def __init__(self, odb_path):
+                self.odb_path = odb_path
+
+
+            def print_elements(self):
+
+                from odbAccess import openOdb
+
+                # Open the ODB file
+                odb = openOdb(path= self.odb_path) 
+                parts_and_elsets = {{}}
+
+                # Get all element sets
+                instances = odb.rootAssembly.instances.keys()
+
+                # Display the element sets
+                print("Available Element Sets in ODB:")
+
+                for instance in instances: 
+                    elsets = odb.rootAssembly.instances[instance].elementSets.keys()
+                    parts_and_elsets[instance] = elsets 
+
+                print(parts_and_elsets) 
+
+                # Close the ODB file
+                odb.close() 
+                return parts_and_elsets
+
+
+
+            def extract_results(self, instance_name, elset_name):
+                try:
+                    
+                    odb = openOdb(path=self.odb_path)
+                    print(f"Opened ODB File: {{self.odb_path}}")
+
+                
+                    try:
+                        instance = odb.rootAssembly.instances[instance_name]
+                        if elset_name not in instance.elementSets:
+                            raise ValueError(f"Elset '{{elset_name}}' not found in instance '{{instance_name}}'.")
+                        elset = instance.elementSets[elset_name]
+                        print(f"Element set '{{elset_name}}' found in instance '{{instance_name}}'")
+                    except KeyError:
+                        raise ValueError(f"Instance '{{instance_name}}' not found in ODB")
+
+                
+                    last_step_name = list(odb.steps.keys())[-1]
+                    step = odb.steps[last_step_name]
+                    print(f"Accessing step: {{last_step_name}}")
+
+                
+                    max_stress = float('-inf')
+                    max_stress_elem = None
+                    max_stress_node = None
+                    framewise_data = []
+
+                    # Process stress for each frame 
+                    max_stress_all_frames = 0
+                    max_stress_node_all_frames = 0
+                    for frame in step.frames:
+                        if 'S' in frame.fieldOutputs:
+                            stress_field = frame.fieldOutputs['S'].getSubset(
+                                region=elset,
+                                position=ELEMENT_NODAL
+                            )
+                            
+                            
+                            node_map = defaultdict(list)
+                            max_principal_stress= 0 
+                            avg =0 
+                            for v in stress_field.values:
+                                if hasattr(v, 'maxPrincipal') and hasattr(v, 'nodeLabel'):
+                                    node_map[v.nodeLabel].append(v.maxPrincipal) 
+
+
+                            for node_label, stress_list in node_map.items(): 
+                                top_n = int(len(stress_list) * 1)
+                                top_values = sorted(stress_list, reverse=True)[:top_n]  
+                                if len(top_values) !=0:
+                                    avg = sum(top_values) / len(top_values)
+                            
+                                if avg > max_principal_stress:
+                                    #print(stress_list)
+                                    max_principal_stress = avg
+                                    max_stress_node = node_label 
+
+                                    if avg > max_stress_all_frames: 
+                                        max_stress_all_frames = avg 
+                                        max_stress_node_all_frames = node_label
+                            
+
+                            timestamp = frame.frameValue
+                                
+                            framewise_data.append([
+                                timestamp,
+                                max_principal_stress,
+                                max_stress_node
+                            ])
+                        
+                            print(f"Frame {{timestamp}}: Max principal stress: {{max_principal_stress:.6f}}, Node: {{max_stress_node}}") 
+
+                    
+                    if framewise_data:
+                        frame_df = pd.DataFrame(
+                            framewise_data,
+                            columns=["Frame", "Max Principal Stress", "Max Principal Stress Node"]
+                        ) 
+                        output_file_path = os.path.join(r"{results_dir}", f"sigma_max_{{instance_name}}_{{elset_name}}_framewise.csv")
+                        frame_df.to_csv(output_file_path, index=False)
+                        print("Frame-wise results saved to max_principal_stress_framewise.csv")
+
+
+
+
+
+                    max_peeq = 0
+                    #max_peeq_elem = None
+                    max_peeq_node = None
+                    
+                    last_frame = step.frames[-1]
+                    if 'PEEQ' in last_frame.fieldOutputs:
+                        peeq_field = last_frame.fieldOutputs['PEEQ'].getSubset(
+                            region=elset,
+                            position=ELEMENT_NODAL
+                        )
+                        for value in peeq_field.values:
+                            if value.data > max_peeq:
+                                max_peeq = value.data
+                                #max_peeq_elem = value.elementLabel
+                                max_peeq_node = value.nodeLabel
+                                
+
+                    
+                    print(f"Results for ODB:")
+                    print(f"Max Principal Stress: {{max_stress_all_frames:.6f}} at Node {{max_stress_node_all_frames}}")
+                    print(f"Max PEEQ: {{max_peeq:.6f}} at Node {{max_peeq_node}}")
+
+                    master_row = [instance_name, elset_name, max_stress_all_frames, max_stress_node_all_frames, max_peeq, max_peeq_node]
+                    # Close ODB
+                    odb.close() 
+                    return master_row
+
+                except Exception as e:
+                    print(f"Error processing ODB {{odb_path}}: {{str(e)}}")
+                    if 'odb' in locals():
+                        odb.close() 
+
+
+        if __name__ == "__main__":  
+            analyse_all_parts = AnalyseAllParts(odb_path = r"{odb_path}")
+            
+            parts_and_elsets = analyse_all_parts.print_elements()  
+            
+            master_dataset = []
+            for instance, elsets in parts_and_elsets.items(): 
+                for elset in elsets: 
+                    master_dataset_row = analyse_all_parts.extract_results(instance_name = instance , elset_name = elset)
+                    master_dataset.append(master_dataset_row)
+
+            master_df = pd.DataFrame(
+                master_dataset,
+                columns=["Instance", "Element Set", "Max Principal Stress", "Max Stress Node", "Max PEEQ", "Max PEEQ Node"]
+            ) 
+
+            output_file_path = os.path.join(r"{results_dir}", "Master_Dataset_All_Parts_and_Elsets.csv")
+            master_df.to_csv(output_file_path, index=False)
+            print("Results saved to Master_Dataset_All_Parts_and_Elsets.csv")
+        """) 
+
+        with open(script_path, "w") as file: 
+                file.write(code) 
+
+        print(f"\nPython script successfully created at: {script_path}\n")
+        
+        current_working_dir = executions_dir
+        abaqus_command = ["abaqus", "cae", f"noGUI=analyse_all_parts.py"]
+        subprocess.run(abaqus_command, cwd= current_working_dir, check=True, capture_output=True, text=True, shell=True) 
+
+
+

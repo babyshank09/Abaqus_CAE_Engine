@@ -12,6 +12,7 @@ class DisplayResultStreamlit:
         self.tasks = Tasks(working_dir = self.working_dir)    
 
 
+
     def display_intro_message(self, llm_with_tools):  
         self.llm_with_tools = llm_with_tools 
         content = """ 
@@ -23,6 +24,7 @@ class DisplayResultStreamlit:
         intro = self.llm_with_tools.invoke([sys_msg] + [HumanMessage(content="Who are you and what all can you do to help me?")])  
         st.session_state["chat_history"].append(AIMessage(content= intro.content)) 
         st.chat_message("assistant").write(st.session_state["chat_history"][0].content)   
+
 
     
     def display_chat_history(self):  
@@ -107,12 +109,26 @@ class DisplayResultStreamlit:
                     self.tasks.cad_to_mesh_task( 
                         step_file_path = results["stp_file_path"],
                         model_name = results["model_name"],
-                            part_name = results["part_name"],
-                            mesh_size = results["mesh_size"],
-                            element_type = results["element_type"]
+                        part_name = results["part_name"],
+                        mesh_size = results["mesh_size"],
+                        element_type = results["element_type"]
+                    ) 
+                    
+                    st.success("successfully executed")  
+
+
+        elif "analyse_all_parts" in st.session_state.response["tool_called"]: 
+
+            st.header("All Parts and Elsets Analyser 🔍")
+            results = self.tasks.ask_analyse_all_parts_inputs()  
+
+            if st.button("Submit Values"):
+                with st.spinner("Processing your request..."): 
+                    self.tasks.analyse_all_parts_task( 
+                        odb_path = results["odb_file_path"],
                         ) 
                     
-                    st.success("successfully executed") 
+                    st.success("successfully executed")  
         
         else: 
             return 

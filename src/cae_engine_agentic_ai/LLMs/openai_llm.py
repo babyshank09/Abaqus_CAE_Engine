@@ -6,7 +6,7 @@ from src.cae_engine_agentic_ai.tools.tools import Tools
 class OpenAILLM():     
     def __init__(self, user_controls_input): 
         self.user_controls_input = user_controls_input     
-        self.tools = [Tools.generate_inp_scripts, Tools.cad_to_mesh_assembly, Tools.cad_to_mesh]
+        self.tools = [Tools.generate_inp_scripts, Tools.cad_to_mesh_assembly, Tools.cad_to_mesh, Tools.analyse_all_parts]
 
 
     def get_llm_model(self):  
