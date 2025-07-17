@@ -17,11 +17,11 @@ class DisplayResultStreamlit:
         self.llm_with_tools = llm_with_tools 
         content = """ 
         Your name is Jarvis. You are a helpful assistant tasked with performing Abaqus Software related tasks. 
-        The user will give you the input from their side.Check if the user input is enough to execute the tasks.
+        The user will give you the input from their side. Check if the user input is enough to execute the tasks.
         If their input is not sufficient, ask for the missing inputs that are required and then execute the task.
         """
         sys_msg = SystemMessage(content= content)
-        intro = self.llm_with_tools.invoke([sys_msg] + [HumanMessage(content="Who are you and what all can you do to help me?")])  
+        intro = self.llm_with_tools.invoke([sys_msg] + [HumanMessage(content="Who are you and what all can you do to help me? List what all you can do individually")])  
         st.session_state["chat_history"].append(AIMessage(content= intro.content)) 
         st.chat_message("assistant").write(st.session_state["chat_history"][0].content)   
 
@@ -128,7 +128,24 @@ class DisplayResultStreamlit:
                         odb_path = results["odb_file_path"],
                         ) 
                     
+                    st.success("successfully executed")   
+
+
+        elif "analyse_single_part" in st.session_state.response["tool_called"]: 
+
+            st.header("Single Part and Elset Analyser 🔍")
+            results = self.tasks.ask_analyse_single_part_inputs()  
+
+            if st.button("Submit Values"):
+                with st.spinner("Processing your request..."): 
+                    self.tasks.analyse_single_part_task( 
+                        odb_path = results["odb_file_path"], 
+                        instance_name = results["instance_name"],
+                        elset_name = results["elset_name"]
+                        ) 
+                    
                     st.success("successfully executed")  
+        
         
         else: 
             return 
