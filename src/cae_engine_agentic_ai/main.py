@@ -4,6 +4,8 @@ from src.cae_engine_agentic_ai.ui.streamlit.loadui import LoadStreamlitUI
 from src.cae_engine_agentic_ai.LLMs.openai_llm import OpenAILLM 
 from src.cae_engine_agentic_ai.graph.graph_builder import GraphBuilder 
 from src.cae_engine_agentic_ai.ui.streamlit.display_result import DisplayResultStreamlit
+from src.cae_engine_agentic_ai.script_generation.script_generation import DonnaAssistant 
+from src.cae_engine_agentic_ai.script_submission.script_submission import AbaqusScriptExecutor
 
 def load_cae_engine():  
     load_streamlit_ui = LoadStreamlitUI()   
@@ -24,39 +26,51 @@ def load_cae_engine():
             usecase = user_controls["selected_usecase"] 
             if not usecase: 
                 st.error("Usecase is not selected")
-                return  
+                return   
             
             working_dir = user_controls["working_dir"]  
             if not working_dir: 
                 st.error("Enter the working directory to proceed!") 
                 return 
-
-
-            display_obj = DisplayResultStreamlit(usecase, working_dir) 
-            if st.session_state["intro_message_count"] == 0:
-                display_obj.display_intro_message(llm_with_tools = model_with_tools) 
-            st.session_state["intro_message_count"] +=1
-
-
-            user_message = st.chat_input("Enter your query here")   
             
-            if st.session_state["intro_message_count"] > 1:
-                display_obj.display_chat_history()
-            
-            if user_message:       
-                try: 
-                    graph_builder = GraphBuilder(model_with_tools = model_with_tools)  
-                    graph = graph_builder.setup_graph(usecase = usecase)   
-                except Exception as e: 
-                    raise e 
-                    return   
-                    
-                display_obj.display_result(graph = graph, user_message = user_message)   
-            display_obj.execute_tasks()
 
-            
+
+            if usecase == "Execute Abaqus CAE Tasks":
+
+                display_obj = DisplayResultStreamlit(usecase, working_dir) 
+                if st.session_state["intro_message_count"] == 0:
+                    display_obj.display_intro_message(llm_with_tools = model_with_tools) 
+                st.session_state["intro_message_count"] +=1
+
+
+                user_message = st.chat_input("Enter your query here")   
                 
+                if st.session_state["intro_message_count"] > 1:
+                    display_obj.display_chat_history()
+                
+                if user_message:       
+                    try: 
+                        graph_builder = GraphBuilder(model_with_tools = model_with_tools)  
+                        graph = graph_builder.setup_graph(usecase = usecase)   
+                    except Exception as e: 
+                        raise e 
+                        return   
+                        
+                    display_obj.display_result(graph = graph, user_message = user_message)   
+                display_obj.execute_tasks()
 
+
+            elif usecase == "Generate Abaqus CAE Script":  
+                donna = DonnaAssistant(llm= model)
+                donna.run() 
+
+
+            elif usecase == "Run Abaqus CAE Script": 
+                executor = AbaqusScriptExecutor(working_directory= working_dir)  
+                executor.run()
+                 
+
+        
         except Exception as e:  
             raise e
 

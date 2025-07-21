@@ -37,7 +37,8 @@ class LoadStreamlitUI:
 
             if "chat_history" not in st.session_state or clear_session: 
                 st.session_state["chat_history"] = []  
-                st.session_state["tools_called"] = []  
+                st.session_state["tools_called"] = []   
+                st.session_state.chat_history_2 = []
                 st.session_state["intro_message_count"] = 0
                 st.session_state["response"] = {"messages": [], "tool_called": []}  
        
