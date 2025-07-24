@@ -141,7 +141,9 @@ class DisplayResultStreamlit:
                     self.tasks.analyse_single_part_task( 
                         odb_path = results["odb_file_path"], 
                         instance_name = results["instance_name"],
-                        elset_name = results["elset_name"]
+                        elset_name = results["elset_name"],
+                        max_stress_limit = results["max_stress_limit"],
+                        min_stress_limit = results["min_stress_limit"]
                         ) 
                     
                     st.success("successfully executed")  

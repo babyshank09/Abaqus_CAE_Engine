@@ -1276,7 +1276,15 @@ class Tasks:
         if "instance_name" not in st.session_state: 
             st.session_state.instance_name = "" 
         if "elset_name" not in st.session_state: 
-            st.session_state.elset_name = ""
+            st.session_state.elset_name = "" 
+        if "max_stress_limit" not in st.session_state: 
+            st.session_state.max_stress_limit = None
+        if "min_stress_limit" not in st.session_state: 
+            st.session_state.min_stress_limit = None
+        if "max_autocompute" not in st.session_state: 
+            st.session_state.max_autocompute = "" 
+        if "min_autocompute" not in st.session_state: 
+            st.session_state.min_autocompute = "" 
 
 
         st.info("This is for analysing a single instance and its elset in the odb file. If you want to analyse all the instances and elsets, please switch to the analyse all parts option instead.")
@@ -1294,22 +1302,66 @@ class Tasks:
             "Elset Name",
             value=st.session_state.elset_name,
             key="elset_name_input"
-        )   
-      
+        )  
+        max_autocompute = st.selectbox( 
+            "Max Auto Compute",
+            ["ON", "OFF"],
+            key="max_autocompute_input", 
+            help = "If ON, the maximum stress limit will be automatically computed from the odb file. If OFF, you can manually input the maximum stress limit."
+        )
+
+
+        if max_autocompute == "OFF":
+            max_stress_limit = st.number_input(
+                "Max Stress Limit",
+                value=st.session_state.max_stress_limit,
+                key="max_stress_limit_input"
+            ) 
+            st.session_state.max_stress_limit = max_stress_limit 
+
+        elif max_autocompute == "ON":
+            max_stress_limit = None
+            st.session_state.max_stress_limit = max_stress_limit
+
+
+        min_autocompute = st.selectbox( 
+            "Min Auto Compute",
+            ["ON", "OFF"],
+            key="min_autocompute_input", 
+            help = "If ON, the minimum stress limit will be automatically computed from the odb file. If OFF, you can manually input the minimum stress limit."
+        )
+
+
+        if min_autocompute == "OFF":
+            min_stress_limit = st.number_input(
+                "Min Stress Limit",
+                value=st.session_state.min_stress_limit,
+                key="min_stress_limit_input"
+            ) 
+            st.session_state.min_stress_limit = min_stress_limit
+        
+        elif min_autocompute == "ON":
+            min_stress_limit = None
+            st.session_state.min_stress_limit = min_stress_limit
+
+
+
         st.session_state.odb_file_path = odb_file_path  
         st.session_state.instance_name = instance_name  
         st.session_state.elset_name = elset_name
-
     
+
         return {
             "odb_file_path": odb_file_path, 
             "instance_name": instance_name, 
-            "elset_name": elset_name
+            "elset_name": elset_name, 
+            "max_stress_limit": max_stress_limit, 
+            "min_stress_limit": min_stress_limit
         }
 
+    
 
-
-    def analyse_single_part_task(self, odb_path, instance_name, elset_name):
+    def analyse_single_part_task(self, odb_path, instance_name, elset_name, max_stress_limit=None, min_stress_limit=None):
         import os
         import subprocess
         import textwrap 
@@ -1333,14 +1385,22 @@ class Tasks:
         import odbAccess  
         from odbAccess import openOdb 
         import math 
-        from collections import defaultdict
+        from collections import defaultdict 
+        import visualization 
+        from displayGroupOdbToolset import LeafFromElementSets 
+        import openpyxl 
+        import os
 
 
         class AnalyseSinglePart(): 
-            def __init__(self, odb_path, instance_name, elset_name):
+            def __init__(self, odb_path, instance_name, elset_name, results_dir, max_stress_limit= None, min_stress_limit=None):
                 self.odb_path = odb_path
                 self.instance_name = instance_name
-                self.elset_name = elset_name
+                self.elset_name = elset_name 
+                self.max_frame_no = 0
+                self.results_dir = results_dir 
+                self.max_stress_limit= max_stress_limit 
+                self.min_stress_limit = min_stress_limit
 
             def extract_results(self):
                 try:
@@ -1368,10 +1428,11 @@ class Tasks:
                     max_stress_elem = None
                     max_stress_node = None
                     framewise_data = []
-
-                    # Process stress for each frame 
+        
                     max_stress_all_frames = 0
                     max_stress_node_all_frames = 0
+                    current_frame_no = 0
+
                     for frame in step.frames:
                         if 'S' in frame.fieldOutputs:
                             stress_field = frame.fieldOutputs['S'].getSubset(
@@ -1401,36 +1462,43 @@ class Tasks:
 
                                     if avg > max_stress_all_frames: 
                                         max_stress_all_frames = avg 
-                                        max_stress_node_all_frames = node_label
+                                        max_stress_node_all_frames = node_label 
+                                        self.max_frame_no = current_frame_no
+                                        self.max_timestamp = frame.frameValue
                             
 
                             timestamp = frame.frameValue
-                                
+                            image_path = self.visualize_result(
+                                                            frame_no= current_frame_no,
+                                                            max_stress_limit=self.max_stress_limit, 
+                                                            min_stress_limit=self.min_stress_limit
+                                                        )
+
                             framewise_data.append([
                                 timestamp,
                                 max_principal_stress,
-                                max_stress_node
+                                max_stress_node,
+                                image_path
                             ])
                         
-                            print(f"Frame {{timestamp}}: Max principal stress: {{max_principal_stress:.6f}}, Node: {{max_stress_node}}") 
+                            print(f"Frame {{timestamp}}: Max principal stress: {{max_principal_stress:.6f}}, Node: {{max_stress_node}}")   
+                            current_frame_no += 1
                     print(f"max stress all frames: {{max_stress_all_frames}}")
 
                     
                     if framewise_data:
                         frame_df = pd.DataFrame(
                             framewise_data,
-                            columns=["Frame", "Max Principal Stress", "Max Principal Stress Node"]
-                        ) 
-                        output_file_path = os.path.join(r"{results_dir}", f"Sigma_max_{{self.instance_name}}_{{self.elset_name}}_framewise.csv")
-                        frame_df.to_csv(output_file_path, index=False)
-                    
-                        print(f"Frame-wise results saved to Sigma_max_{{self.instance_name}}_{{self.elset_name}}_framewise.csv")
+                            columns=["Timestamp", "Max Principal Stress", "Max Principal Stress Node", "Image Path"]
+                        )
+                        self.create_table_with_image_link(dataframe= frame_df, table_name= f"Sigma_max_{{self.instance_name}}_{{self.elset_name}}_framewise.xlsx")
+                        #frame_df.to_excel(f"Sigma_max_{{self.instance_name}}_{{self.elset_name}}_framewise.xlsx", index=False)
+                        print(f"Frame-wise results saved to Sigma_max_{{self.instance_name}}_{{self.elset_name}}_framewise.xlsx")
 
 
 
 
-
-                    max_peeq = float('-inf')
+                    max_peeq = 0
                     max_peeq_elem = None
                     max_peeq_node = None
                     
@@ -1452,39 +1520,129 @@ class Tasks:
                     # Print and save results
                     if max_stress_node or max_peeq_elem:
                         print(f"Results for ODB:")
-                        print(f"Max Principal Stress: {{max_stress:.6f}} at Element {{max_stress_elem}}, "
-                            f"Node {{max_stress_node}}")
-                        print(f"Max PEEQ: {{max_peeq:.6f}} at Element {{max_peeq_elem}}, "
-                            f"Node {{max_peeq_node}}")
+                        print(f"Max Principal Stress: {{max_stress_all_frames:.6f}} at Node {{max_stress_node_all_frames}}")
+                        print(f"Max PEEQ: {{max_peeq:.6f}} at Node {{max_peeq_node}}")
 
-                        # Save to master CSV
+                        # Save to master CSV 
+                        image_path = self.visualize_result(
+                                                            frame_no= current_frame_no,
+                                                            max_stress_limit=self.max_stress_limit, 
+                                                            min_stress_limit=self.min_stress_limit
+                                                        )
                         master_df = pd.DataFrame(
-                            [[max_stress_all_frames, max_stress_node_all_frames, max_peeq, max_peeq_node]],
-                            columns=["Max Principal Stress", "Max Stress Node", "Max PEEQ", "Max PEEQ Node"]
-                        ) 
+                            [[max_stress_all_frames, max_stress_node_all_frames, self.max_timestamp, image_path, max_peeq, max_peeq_node]],
+                            columns=["Max Principal Stress", "Max Stress Node","Max Stress Timestamp", "Image Path", "Max PEEQ", "Max PEEQ Node"]
+                        )
+                        self.create_table_with_image_link(dataframe= master_df, table_name= f"Master_Dataset_{{self.instance_name}}_{{self.elset_name}}.xlsx")
 
-                        output_file_path = os.path.join(r"{results_dir}", f"Master_Dataset_{{self.instance_name}}_{{self.elset_name}}.csv")
-                        master_df.to_csv(output_file_path, index=False)
-                        print(f"Results saved to Master_Dataset_{{self.instance_name}}_{{self.elset_name}}.csv")
+                        #master_df.to_excel(f"Master_Dataset_{{self.instance_name}}_{{self.elset_name}}.xlsx", index=False)
+                        print(f"Results saved to Master_Dataset_{{self.instance_name}}_{{self.elset_name}}.xlsx")
+        
+
                     else:
                         print("No stress or PEEQ data found in ODB")
 
-                    # Close ODB
+                    # Close ODB 
                     odb.close()
 
                 except Exception as e:
                     print(f"Error processing ODB {{self.odb_path}}: {{str(e)}}")
                     if 'odb' in locals():
-                        odb.close() 
+                        odb.close()  
 
 
+
+
+            def visualize_result(self, frame_no, max_stress_limit=None, min_stress_limit=None):  
+                odb = visualization.openOdb(path=self.odb_path)
+
+                session.Viewport(name='Stress Viewport', origin=(0, 0), width=200, height=100) 
+                session.viewports['Stress Viewport'].odbDisplay.basicOptions.setValues(
+                averagingThreshold=100)
+                vp = session.viewports['Stress Viewport']
+                vp.setValues(displayedObject=odb)
+
+            
+                last_step = odb.steps[list(odb.steps.keys())[-1]]
+                last_frame = last_step.frames[self.max_frame_no]
+
+                vp.odbDisplay.setFrame(step= last_step.name, frame= frame_no)
+
+
+                vp.odbDisplay.setPrimaryVariable( 
+                    variableLabel='S',
+                    outputPosition=INTEGRATION_POINT,
+                    refinement=(INVARIANT, 'Max. Principal')
+                )
+
+
+                leaf = LeafFromElementSets((f"{{self.instance_name}}.{{self.elset_name}}",))  # format: 'instanceName.setName'
+                vp.odbDisplay.displayGroup.replace(leaf=leaf) 
+                
+
+                if max_stress_limit and not min_stress_limit:
+                    session.viewports['Stress Viewport'].odbDisplay.contourOptions.setValues(
+                    maxAutoCompute=OFF, maxValue=max_stress_limit, minAutoCompute=ON)  
+
+                elif min_stress_limit and not max_stress_limit:
+                    session.viewports['Stress Viewport'].odbDisplay.contourOptions.setValues(
+                    minAutoCompute=OFF, minValue=min_stress_limit, maxAutoCompute=ON) 
+                
+                elif max_stress_limit and min_stress_limit:
+                    session.viewports['Stress Viewport'].odbDisplay.contourOptions.setValues(
+                    maxAutoCompute=OFF, maxValue=max_stress_limit, minAutoCompute=OFF, minValue=min_stress_limit)
+
+                elif not max_stress_limit and not min_stress_limit:
+                    session.viewports['Stress Viewport'].odbDisplay.contourOptions.setValues(
+                    maxAutoCompute=ON, minAutoCompute=ON)
+
+        
+                vp.odbDisplay.display.setValues(plotState=(CONTOURS_ON_DEF,))
+
+                vp.view.setValues(cameraPosition=(200, 200, 200), cameraUpVector=(0, 1, 0))
+
+                output_image_name = os.path.join(self.results_dir, f"{{self.instance_name}}_{{self.elset_name}}_sigma_max_plot_frame_{{frame_no}}")
+                session.printOptions.setValues(rendition=COLOR)
+                session.printToFile(fileName= output_image_name, format=PNG, canvasObjects=(vp,))
+
+                output_image_path = os.path.join(self.results_dir, f"{{self.instance_name}}_{{self.elset_name}}_sigma_max_plot_frame_{{frame_no}}.png")
+
+                return  output_image_path
+
+
+            
+
+            def create_table_with_image_link(self, dataframe, table_name):            
+
+                df = dataframe 
+                df["Image Link"] = df["Image Path"].apply(lambda x: f'=HYPERLINK("{{x}}", "View Image")')
+
+                # Optionally drop the 'File Path' column if you only want name + hyperlink
+                df.drop(columns="Image Path", inplace=True) 
+                
+                styled_df = df.style.applymap(
+                    lambda val: 'color: blue; text-decoration: underline', 
+                    subset=['Image Link']
+                )
+
+                # Export to Excel
+                table_path = os.path.join(self.results_dir, table_name) 
+                with pd.ExcelWriter(table_path, engine="openpyxl") as writer:
+                    styled_df.to_excel(writer, index=False)
+
+            
+                    
 
         if __name__ == "__main__": 
             analyse_single_part = AnalyseSinglePart(odb_path= r"{odb_path}",
                                                     instance_name = "{instance_name}", 
-                                                    elset_name= "{elset_name}"
-                                                    ) 
-            analyse_single_part.extract_results()
+                                                    elset_name= "{elset_name}", 
+                                                    results_dir = r"{results_dir}", 
+                                                    max_stress_limit= {max_stress_limit},
+                                                    min_stress_limit= {min_stress_limit}
+                                                ) 
+
+            analyse_single_part.extract_results()  
         """)  
 
         with open(script_path, "w") as file: 
@@ -1495,6 +1653,11 @@ class Tasks:
         current_working_dir = executions_dir
         abaqus_command = ["abaqus", "cae", f"noGUI=analyse_single_part.py"]
         subprocess.run(abaqus_command, cwd= current_working_dir, check=True, capture_output=True, text=True, shell=True) 
+
+
+
+
+
 
 
 
