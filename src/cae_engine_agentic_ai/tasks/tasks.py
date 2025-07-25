@@ -1,6 +1,8 @@
 import os 
 from typing import Optional
 import streamlit as st
+import pandas as pd
+import openpyxl
 
 
 class Tasks: 
@@ -1427,7 +1429,7 @@ class Tasks:
                     max_stress = float('-inf')
                     max_stress_elem = None
                     max_stress_node = None
-                    framewise_data = []
+                    framewise_data = [] 
         
                     max_stress_all_frames = 0
                     max_stress_node_all_frames = 0
@@ -1473,7 +1475,7 @@ class Tasks:
                                                             max_stress_limit=self.max_stress_limit, 
                                                             min_stress_limit=self.min_stress_limit
                                                         )
-
+                               
                             framewise_data.append([
                                 timestamp,
                                 max_principal_stress,
@@ -1525,10 +1527,11 @@ class Tasks:
 
                         # Save to master CSV 
                         image_path = self.visualize_result(
-                                                            frame_no= current_frame_no,
+                                                            frame_no= self.max_frame_no,
                                                             max_stress_limit=self.max_stress_limit, 
                                                             min_stress_limit=self.min_stress_limit
                                                         )
+
                         master_df = pd.DataFrame(
                             [[max_stress_all_frames, max_stress_node_all_frames, self.max_timestamp, image_path, max_peeq, max_peeq_node]],
                             columns=["Max Principal Stress", "Max Stress Node","Max Stress Timestamp", "Image Path", "Max PEEQ", "Max PEEQ Node"]
@@ -1556,7 +1559,7 @@ class Tasks:
             def visualize_result(self, frame_no, max_stress_limit=None, min_stress_limit=None):  
                 odb = visualization.openOdb(path=self.odb_path)
 
-                session.Viewport(name='Stress Viewport', origin=(0, 0), width=200, height=100) 
+                session.Viewport(name='Stress Viewport', origin=(0, 0), width=250, height=150) 
                 session.viewports['Stress Viewport'].odbDisplay.basicOptions.setValues(
                 averagingThreshold=100)
                 vp = session.viewports['Stress Viewport']
@@ -1618,13 +1621,13 @@ class Tasks:
                 df["Image Link"] = df["Image Path"].apply(lambda x: f'=HYPERLINK("{{x}}", "View Image")')
 
                 # Optionally drop the 'File Path' column if you only want name + hyperlink
-                df.drop(columns="Image Path", inplace=True) 
+                # df.drop(columns="Image Path", inplace=True) 
                 
                 styled_df = df.style.applymap(
                     lambda val: 'color: blue; text-decoration: underline', 
                     subset=['Image Link']
                 )
-
+ 
                 # Export to Excel
                 table_path = os.path.join(self.results_dir, table_name) 
                 with pd.ExcelWriter(table_path, engine="openpyxl") as writer:
@@ -1652,13 +1655,44 @@ class Tasks:
         
         current_working_dir = executions_dir
         abaqus_command = ["abaqus", "cae", f"noGUI=analyse_single_part.py"]
-        subprocess.run(abaqus_command, cwd= current_working_dir, check=True, capture_output=True, text=True, shell=True) 
+        subprocess.run(abaqus_command, cwd= current_working_dir, check=True, capture_output=True, text=True, shell=True)  
 
 
+        def make_clickable(path):
+            path = str(path).replace("\\", "/")
+            return f'<a href="file:///{path}" target="_blank">View Image</a>'
 
 
+        framewise_filename = f"Sigma_max_{instance_name}_{elset_name}_framewise.xlsx"
+        master_filename = f"Master_Dataset_{instance_name}_{elset_name}.xlsx"
+        framewise_path = os.path.join(results_dir, framewise_filename)
+        master_path = os.path.join(results_dir, master_filename)
 
 
+        try:
+            df_framewise = pd.read_excel(framewise_path, engine="openpyxl")
+            df_master = pd.read_excel(master_path, engine="openpyxl")
 
+            df_framewise['Image Link'] = df_framewise['Image Path'].apply(make_clickable) 
+            df_master['Image Link'] = df_master['Image Path'].apply(make_clickable)
+
+            framewise_image_paths = df_framewise["Image Path"].tolist()
+            df_framewise.drop(columns=['Image Path'], inplace=True)
+            df_master.drop(columns=['Image Path'], inplace=True)
+
+            st.subheader("📊 Framewise Data")
+            st.markdown(df_framewise.to_html(escape=False, index=False), unsafe_allow_html=True)
+
+            st.subheader("📄 Master Dataset")
+            st.markdown(df_master.to_html(escape=False, index=False), unsafe_allow_html=True) 
+            
+            # st.subheader("📈 Contour Plots") 
+            # selected_image_path = st.selectbox("Select the Contour Plot you want to view:", framewise_image_paths)
+            # if selected_image_path:
+            #     st.image(os.path.normpath(selected_image_path), caption="Contour Plot", use_column_width=True)
+            
+
+        except Exception as e:
+            st.error(f"⚠️ An error occurred: {str(e)}")
 
 

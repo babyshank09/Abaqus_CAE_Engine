@@ -16,4 +16,5 @@ langchain-huggingface
 langgraph 
 langgraph-cli[inmem] 
 streamlit 
-azure-identity
+azure-identity 
+openpyxl
