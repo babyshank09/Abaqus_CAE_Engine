@@ -43,6 +43,8 @@ class Tools:
     def analyse_all_parts(): 
         """  
         Initiates the analysis process for all parts and their respective element sets present in the provided ODB file.
+        This tool also displays the image of the contour plot of the results of max principal stress for all the 
+        instances/parts and its elsets in the form of a link in a table that will be generated. 
         This tool does not directly collect user inputs but invokes the analysis workflow on all available parts and elsets.
         Execute this tool whenever the user wants to extract results like max principal stress and PEEQ data from all parts/instances
         from an odb file or asks whether this task can be accomplished. Display the message that the process has 
@@ -60,8 +62,9 @@ class Tools:
         instance/part and its elset in the form of a link in a table that will be generated. 
         This tool does not directly collect user inputs but invokes the analysis workflow for the selected instance and elset.
         Execute this tool whenever the user wants to extract results like max principal stress and PEEQ data from a single part/instance
-        and a specified elset within an ODB file or asks whether this task can be accomplished.Display the message that the process has 
-        started only after this function is executed,and not before.
+        and a specified elset within an ODB file or asks whether this task can be accomplished. Display the message that the process has 
+        started only after this function is executed,and not before. Also display the message that the process has started only
+        after executing this and nothing before executing this...
         Note: This fetches results only for the given part/instance and elset, not across all parts.
         """
         pass

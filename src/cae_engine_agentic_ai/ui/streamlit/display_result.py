@@ -126,6 +126,8 @@ class DisplayResultStreamlit:
                 with st.spinner("Processing your request..."): 
                     self.tasks.analyse_all_parts_task( 
                         odb_path = results["odb_file_path"],
+                        max_stress_limit = results["max_stress_limit"],
+                        min_stress_limit = results["min_stress_limit"]
                         ) 
                     
                     st.success("successfully executed")   
