@@ -36,5 +36,5 @@ Abaqus_CAE_Engine
 
 - Abaqus/CAE 2020 or later
 - Python 3.12+
-- Additional dependencies listed in `requirements.txt`
+- Additional dependencies listed in `requirements.txt`.
 
