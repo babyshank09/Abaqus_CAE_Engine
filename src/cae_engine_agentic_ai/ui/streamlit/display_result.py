@@ -48,13 +48,11 @@ class DisplayResultStreamlit:
 
             response = self.graph.invoke({"messages": st.session_state.chat_history})  
             st.session_state.response = response
-            #st.write(response)  
+    
             parsed_response = response["messages"][-1].content 
             st.session_state.chat_history.append(AIMessage(parsed_response))
             st.chat_message("assistant").write(st.session_state.chat_history[-1].content)  
-            st.session_state.chat_history = response["messages"]  
-            #st.write(f"The tools called are {response["tool_called"]}")
-            #st.write(st.session_state.chat_history) 
+        
 
     
 
@@ -135,7 +133,7 @@ class DisplayResultStreamlit:
 
         elif "analyse_single_part" in st.session_state.response["tool_called"]: 
 
-            st.header("Single Part and Elset Analyser 🔍")
+            header = st.header("Single Part and Elset Analyser 🔍")  
             results = self.tasks.ask_analyse_single_part_inputs()  
 
             if st.button("Submit Values"):
@@ -148,8 +146,8 @@ class DisplayResultStreamlit:
                         min_stress_limit = results["min_stress_limit"]
                         ) 
                     
-                    st.success("successfully executed")  
-        
+                    st.success("successfully executed")   
+                    
         
         else: 
             return 
