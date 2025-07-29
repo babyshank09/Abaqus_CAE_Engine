@@ -133,7 +133,7 @@ class DisplayResultStreamlit:
 
         elif "analyse_single_part" in st.session_state.response["tool_called"]: 
 
-            header = st.header("Single Part and Elset Analyser 🔍")  
+            st.header("Single Part and Elset Analyser 🔍")  
             results = self.tasks.ask_analyse_single_part_inputs()  
 
             if st.button("Submit Values"):
