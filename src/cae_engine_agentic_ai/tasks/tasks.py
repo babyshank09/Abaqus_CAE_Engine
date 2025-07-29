@@ -1670,7 +1670,6 @@ class Tasks:
 
         
                 vp.odbDisplay.display.setValues(plotState=(CONTOURS_ON_DEF,))
-
                 vp.view.setValues(cameraPosition=(200, 200, 200), cameraUpVector=(0, 1, 0))
 
                 output_image_name = os.path.join(self.results_dir, f"{{self.instance_name}}_{{self.elset_name}}_sigma_max_plot_frame_{{frame_no}}")
