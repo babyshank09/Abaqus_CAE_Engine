@@ -20,7 +20,7 @@ class LoadStreamlitUI:
             usecase_options = self.config.get_usecase_options() 
             self.user_controls["selected_usecase"] = st.selectbox("Select Use Case", usecase_options)   
 
-            self.user_controls["working_dir"] = st.text_input("Working Directory") 
+            self.user_controls["working_dir"] = st.text_input("Working Directory", value = r"") 
             
             llm_options = self.config.get_llm_options()  
             self.user_controls["selected_llm"] = st.selectbox("Select LLM Service Provider", llm_options)  
@@ -29,7 +29,7 @@ class LoadStreamlitUI:
                 openai_model_options = self.config.get_openai_model_options() 
                 self.user_controls["selected_openai_model"] = st.selectbox("Select OpenAI Model", openai_model_options)  
 
-                self.user_controls["OPENAI_API_KEY"] = st.text_input("OpenAI API Key", type="password") 
+                self.user_controls["OPENAI_API_KEY"] = st.text_input("OpenAI API Key",value ="", type="password") 
                 if not self.user_controls["OPENAI_API_KEY"]:
                      st.warning("⚠️ Please enter your OpenAI API key to proceed!")  
 
@@ -39,6 +39,7 @@ class LoadStreamlitUI:
                 st.session_state["chat_history"] = [] 
                 st.session_state["chat_ui_history"] = [] 
                 st.session_state["tools_called"] = []   
+                st.session_state.current_tool = "" 
                 st.session_state.chat_history_2 = []
                 st.session_state["intro_message_count"] = 0
                 st.session_state["response"] = {"messages": [], "tool_called": []}  

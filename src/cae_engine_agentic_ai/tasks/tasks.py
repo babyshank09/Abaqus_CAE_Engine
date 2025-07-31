@@ -579,9 +579,11 @@ class Tasks:
             value=st.session_state.model_name,
             key="model_name_input"
         )
-        element_type = st.text_input(
+
+        element_types = ["C3D10", "C3D4", "C3D8R", "C3D8I", "C3D10M", "C3D10HS"]
+        element_type = st.selectbox(
             "Element Type",
-            value=st.session_state.element_type,
+            element_types,
             key="element_type_input"
         )   
 
@@ -601,42 +603,9 @@ class Tasks:
 
 
     def cad_to_mesh_assembly_task(self, step_file_path: str, model_name: str, mesh_size: float, element_type: str):
-        """
-        Automates the process of importing an assembly from a STEP file into Abaqus/CAE, meshing all valid parts, and saving the model.
-
-        This function is specifically designed for STEP files that represent mechanical assemblies (i.e., multiple parts).
-        It handles part import, mesh generation (both 2D and 3D depending on geometry), and saves the resulting .cae model.
-        
-        Parameters:
-            step_file_path (str): Absolute path to the STEP (.stp/.step) file containing the assembly.
-            model_name (str): Name of the Abaqus model to create within the CAE environment.
-            mesh_size (float): Global seed size to control the mesh resolution.
-            element_type (str): Element type for meshing. Examples include:
-                                - 'C3D10' for 3D tetrahedral elements
-                                - 'C3D4' for linear 3D tetrahedral elements
-                                - 'S4R' for shell (2D) elements
-            
-        Behavior:
-            - Detects and counts all bodies in the STEP file.
-            - Imports each part individually and adds it to the model.
-            - Filters parts with usable geometry (faces or cells).
-            - Creates instances in the assembly and applies appropriate meshing strategies.
-            - Automatically selects meshing technique based on geometry type (2D or 3D).
-            - Applies relevant element types.
-            - Saves the final model as a .cae file in a predefined Results directory.
-            - Logs the import and meshing process, including any failures.
-        
-        Output:
-            - Saves the meshed Abaqus model as a .cae file in the "Results" directory under the predefined base environment.
-
-        Note:
-            This function is not intended for single-part STEP files. Use a dedicated single-part meshing script in such cases.
-        """
-        
         import os
         import subprocess
         import textwrap
-
 
         base_dir = os.path.abspath(self.working_dir)
         executions_dir = os.path.join(base_dir, "Executions")
@@ -662,153 +631,202 @@ class Tasks:
         model_name = "{model_name}"
         mesh_size = {mesh_size}
         element_type = "{element_type}"
-        cae_file_path = os.path.join(r"{results_dir}", "meshed_assembly.cae") 
+        cae_file_path = os.path.join(r"{results_dir}", f"{{model_name}}_{{element_type}}_mesh_size_{{mesh_size}}.cae") 
         cae_file_path = os.path.normpath(cae_file_path)  
+        elem = False
 
 
-        print("AUTOMATIC STEP FILE IMPORT")
+        def mesh_assembly():
+            print("AUTOMATIC STEP FILE IMPORT")
 
 
-        step_geometry = mdb.openStep(fileName=step_file_path)
-        num_parts_in_file = step_geometry.numberOfParts
-        print("STEP file contains: %d parts" % num_parts_in_file)
+            step_geometry = mdb.openStep(fileName=step_file_path)
+            num_parts_in_file = step_geometry.numberOfParts
+            print("STEP file contains: %d parts" % num_parts_in_file)
 
 
-        if model_name in mdb.models:
-            del mdb.models[model_name]
-        mdb.Model(name=model_name)
-        model = mdb.models[model_name]
-        print("Created model: %s" % model_name)
+            if model_name in mdb.models:
+                del mdb.models[model_name]
+            mdb.Model(name=model_name)
+            model = mdb.models[model_name]
+            print("Created model: %s" % model_name)
 
 
-        print("Importing parts...")
-        imported_parts = []
-        failed_imports = []
+            print("Importing parts...")
+            imported_parts = []
+            failed_imports = []
 
-        for i in range(1, num_parts_in_file + 1):
-            try:
-                part_name = "Part_%d" % i
-                model.PartFromGeometryFile(
-                    name=part_name,
-                    geometryFile=step_geometry,
-                    bodyNum=i,
-                    combine=False,
-                    dimensionality=THREE_D,
-                    type=DEFORMABLE_BODY,
-                    scale=1.0
-                )
-                imported_parts.append(part_name)
-                print("Imported: %s" % part_name)
+            for i in range(1, num_parts_in_file + 1):
+                try:
+                    part_name = "Part_%d" % i
+                    model.PartFromGeometryFile(
+                        name=part_name,
+                        geometryFile=step_geometry,
+                        bodyNum=i,
+                        combine=False,
+                        dimensionality=THREE_D,
+                        type=DEFORMABLE_BODY,
+                        scale=1.0
+                    )
+                    imported_parts.append(part_name)
+                    print("Imported: %s" % part_name)
 
-            except Exception as e:
-                failed_imports.append(i)
-                print("Failed Part %d: %s" % (i, str(e)))
+                except Exception as e:
+                    failed_imports.append(i)
+                    print("Failed Part %d: %s" % (i, str(e)))
 
-        print("Successfully imported: %d parts" % len(imported_parts))
-
-
-        valid_parts = []
-        for part_name in imported_parts:
-            part_obj = model.parts[part_name]
-            num_cells = len(part_obj.cells)
-            num_faces = len(part_obj.faces)
-
-            if num_cells > 0 or num_faces > 0:
-                valid_parts.append(part_name)
-
-        print("Valid parts for meshing: %d" % len(valid_parts))
+            print("Successfully imported: %d parts" % len(imported_parts))
 
 
-        print("Creating assembly...")
-        assembly = model.rootAssembly
+            valid_parts = []
+            for part_name in imported_parts:
+                part_obj = model.parts[part_name]
+                num_cells = len(part_obj.cells)
+                num_faces = len(part_obj.faces)
 
-        created_instances = []
-        for part_name in valid_parts:
-            try:
-                instance_name = "%s_Instance" % part_name
-                assembly.Instance(
-                    name=instance_name,
-                    part=model.parts[part_name],
-                    dependent=OFF 
-                )
-                created_instances.append(instance_name)
-                print("Created instance: %s" % instance_name)
-            except Exception as e:
-                print("Failed instance %s: %s" % (part_name, str(e)))
+                if num_cells > 0 or num_faces > 0:
+                    valid_parts.append(part_name)
+
+            print("Valid parts for meshing: %d" % len(valid_parts))
 
 
-        print("Meshing at assembly level...")
-        meshed_instances = []
-        total_elements = 0
-        total_nodes = 0
+            print("Creating assembly...")
+            assembly = model.rootAssembly
 
-        for instance_name in created_instances:
-            try:
-                instance = assembly.instances[instance_name]
+            created_instances = []
+            for part_name in valid_parts:
+                try:
+                    instance_name = "%s_Instance" % part_name
+                    assembly.Instance(
+                        name=instance_name,
+                        part=model.parts[part_name],
+                        dependent=OFF 
+                    )
+                    created_instances.append(instance_name)
+                    print("Created instance: %s" % instance_name)
+                except Exception as e:
+                    print("Failed instance %s: %s" % (part_name, str(e)))
 
 
-                assembly.seedPartInstance(
-                    regions=(instance,),
-                    size=mesh_size,
-                    deviationFactor=0.1,
-                    minSizeFactor=0.1
-                )
+            print("Meshing at assembly level...")
+            meshed_instances = []
+            total_elements = 0
+            total_nodes = 0
 
-            
-                cells = instance.cells
-                if len(cells) > 0:
-                    assembly.setMeshControls(
-                        regions=cells,
-                        technique=FREE,
-                        elemShape=TET
+            for instance_name in created_instances:
+                try:
+                    instance = assembly.instances[instance_name]
+
+
+                    assembly.seedPartInstance(
+                        regions=(instance,),
+                        size=mesh_size,
+                        deviationFactor=0.1,
+                        minSizeFactor=0.1
                     )
 
-                    if element_type == "C3D10":
-                        elem_type = mesh.ElemType(elemCode=C3D10, elemLibrary=STANDARD)
-                    elif element_type == "C3D4":
-                        elem_type = mesh.ElemType(elemCode=C3D4, elemLibrary=STANDARD)
-                    else:
-                        elem_type = mesh.ElemType(elemCode=C3D10, elemLibrary=STANDARD)
-
-                    region = regionToolset.Region(cells=cells)
-                    assembly.setElementType(regions=region, elemTypes=(elem_type,))
-
                 
-                assembly.generateMesh(regions=(instance,)) 
+                    cells = instance.cells
+                    if len(cells) > 0:
+                        try:
+                            if element_type in ["C3D8R", "C3D8I"]:
+                                assembly.setMeshControls(
+                                    regions=cells,
+                                    technique=STRUCTURED,
+                                    elemShape=HEX 
+                                )
+                                elem =True
+                            else:
+                                assembly.setMeshControls(
+                                    regions=cells,
+                                    technique=FREE,
+                                    elemShape=TET
+                                )   
+                                elem =False
+
+                        except:  
+                            assembly.setMeshControls(
+                                    regions=cells,
+                                    technique=FREE,
+                                    elemShape=TET
+                                )  
+                            elem =False
+
+                        
+                        if element_type == "C3D10":
+                            elem_type = mesh.ElemType(elemCode=C3D10, elemLibrary=STANDARD)
+                        elif element_type == "C3D4":
+                            elem_type = mesh.ElemType(elemCode=C3D4, elemLibrary=STANDARD) 
+                        elif element_type == "C3D8R" and not elem:
+                            elem_type = mesh.ElemType(elemCode=C3D10M, elemLibrary=STANDARD)  
+                        elif element_type == "C3D8I"and not elem:
+                            elem_type = mesh.ElemType(elemCode=C3D10M, elemLibrary=STANDARD) 
+                        elif element_type == "C3D8R" and elem:
+                            elem_type = mesh.ElemType(elemCode=C3D8R, elemLibrary=STANDARD)  
+                        elif element_type == "C3D8I"and elem:
+                            elem_type = mesh.ElemType(elemCode=C3D8I, elemLibrary=STANDARD) 
+                        elif element_type == "C3D10M":
+                            elem_type = mesh.ElemType(elemCode=C3D10M, elemLibrary=STANDARD)
+                        elif element_type == "C3D10HS":
+                            elem_type = mesh.ElemType(elemCode=C3D10HS, elemLibrary=STANDARD) 
+                        else:
+                            elem_type = mesh.ElemType(elemCode=C3D10M, elemLibrary=STANDARD)
 
 
-                elements = len(instance.elements)
-                nodes = len(instance.nodes)
+                        region = regionToolset.Region(cells=cells)
+                        assembly.setElementType(regions=region, elemTypes=(elem_type,))
 
-                print("Meshed %s: %d elements, %d nodes" % (instance_name, elements, nodes))
+                    
+                    assembly.generateMesh(regions=(instance,)) 
 
-                meshed_instances.append(instance_name)
-                total_elements += elements
-                total_nodes += nodes
 
+                    elements = len(instance.elements)
+                    nodes = len(instance.nodes)
+
+                    print("Meshed %s: %d elements, %d nodes" % (instance_name, elements, nodes))
+
+                    meshed_instances.append(instance_name)
+                    total_elements += elements
+                    total_nodes += nodes
+
+                except Exception as e:
+                    print("Meshing error on instance %s: %s" % (instance_name, str(e)))
+
+
+            print("Saving model...")
+            try:
+                mdb.saveAs(pathName=cae_file_path)
+                print("Saved: %s" % cae_file_path)
             except Exception as e:
-                print("Meshing error on instance %s: %s" % (instance_name, str(e)))
+                print("Save error: %s" % str(e))
 
 
-        print("Saving model...")
-        try:
-            mdb.saveAs(pathName=cae_file_path)
-            print("Saved: %s" % cae_file_path)
-        except Exception as e:
-            print("Save error: %s" % str(e))
+            print("SUMMARY")
+            print("Parts detected: %d" % num_parts_in_file)
+            print("Parts imported: %d" % len(imported_parts))
+            print("Instances meshed: %d" % len(meshed_instances))
+            print("Total elements: %d" % total_elements)
+            print("Total nodes: %d" % total_nodes)
+
+            if len(meshed_instances) == len(valid_parts):
+                print("SUCCESS: All %d instances meshed at assembly level" % len(valid_parts))
+            else:
+                print("Partial success: %d/%d instances meshed" % (len(meshed_instances), len(valid_parts))) 
 
 
-        print("SUMMARY")
-        print("Parts detected: %d" % num_parts_in_file)
-        print("Parts imported: %d" % len(imported_parts))
-        print("Instances meshed: %d" % len(meshed_instances))
-        print("Total elements: %d" % total_elements)
-        print("Total nodes: %d" % total_nodes)
 
-        if len(meshed_instances) == len(valid_parts):
-            print("SUCCESS: All %d instances meshed at assembly level" % len(valid_parts))
-        else:
-            print("Partial success: %d/%d instances meshed" % (len(meshed_instances), len(valid_parts)))
+        def print_step_attributes(step_file_path):
+            step_geometry = mdb.openStep(fileName=step_file_path)
+            print("Attributes and methods of step_geometry:")
+            for attr in dir(step_geometry):
+                print(attr) 
+
+
+            
+
+
+        if __name__ == "__main__":  
+            mesh_assembly() 
         """) 
 
         with open(script_path, "w") as file: 
@@ -1050,7 +1068,8 @@ class Tasks:
 
         odb_file_path= st.text_input(
             "ODB File Location (e.g., path/to/file.odb)",
-            value=st.session_state.odb_file_path
+            value=st.session_state.odb_file_path, 
+            key = "odb_path"
         )  
   
         max_stress_limit = st.text_input(
@@ -1388,11 +1407,11 @@ class Tasks:
 
         try:
             df_master = pd.read_excel(master_path, engine="openpyxl")
-            df_master['Image Link'] = df_master['Image Path'].apply(make_clickable)
-            df_master.drop(columns=['Image Path'], inplace=True)
+            df_master['Image Link'] = df_master['Image Path'].apply(make_clickable) 
+            image_paths = df_master["Image Path"]
+            df_master.drop(columns=['Image Path'], inplace=True) 
 
-            st.subheader("📊 Master Dataset")
-            st.markdown(df_master.to_html(escape=False, index=False), unsafe_allow_html=True)  
+            return df_master, image_paths.tolist()  
 
         except Exception as e:
             st.error(f"⚠️ An error occurred: {str(e)}")
@@ -1416,7 +1435,8 @@ class Tasks:
 
         odb_file_path= st.text_input(
             "ODB File Location (e.g., path/to/file.odb)",
-            value=st.session_state.odb_file_path
+            value=st.session_state.odb_file_path, 
+            key = "odb_path"
         )  
         instance_name = st.text_input(
             "Part Name",
@@ -1738,17 +1758,11 @@ class Tasks:
         try:
             df_master = pd.read_excel(master_path, engine="openpyxl")
             df_master['Image Link'] = df_master['Image Path'].apply(make_clickable)
-
+           
+            image_path = df_master["Image Path"]
             df_master.drop(columns=['Image Path'], inplace=True)
-
-            st.subheader("📄 Master Dataset")
-            st.markdown(df_master.to_html(escape=False, index=False), unsafe_allow_html=True) 
             
-            # st.subheader("📈 Contour Plots") 
-            # selected_image_path = st.selectbox("Select the Contour Plot you want to view:", framewise_image_paths)
-            # if selected_image_path:
-            #     st.image(os.path.normpath(selected_image_path), caption="Contour Plot", use_column_width=True)
-            
+            return df_master, image_path.tolist()     
 
         except Exception as e:
             st.error(f"⚠️ An error occurred: {str(e)}")
