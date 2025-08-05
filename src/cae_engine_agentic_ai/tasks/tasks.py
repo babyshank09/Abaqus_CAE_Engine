@@ -815,18 +815,32 @@ class Tasks:
 
 
 
-        def print_step_attributes(step_file_path):
-            step_geometry = mdb.openStep(fileName=step_file_path)
-            print("Attributes and methods of step_geometry:")
-            for attr in dir(step_geometry):
-                print(attr) 
+        def convert_cae_to_inp(cae_file_path, job_name, output_inp_dir=None):
+            mdb.openAuxMdb(pathName=cae_file_path)
+
+            job = mdb.Job(name=job_name, model=model_name)
 
 
-            
+            if output_inp_dir: 
+                inp_file_path = os.path.join(output_inp_dir, job_name + '.inp') 
+
+                if os.path.exists(inp_file_path):
+                    os.remove(inp_file_path) 
+
+                job.writeInput(consistencyChecking=OFF)
+                os.rename(job_name + '.inp', inp_file_path)
+                print(f".inp file written to: {{inp_file_path}}")
+            else: 
+                os.chdir(r"{results_dir}")
+                job.writeInput(consistencyChecking=OFF)
+                print(f".inp file written in current directory: {{job_name}}.inp")
+
+            mdb.closeAuxMdb() 
 
 
         if __name__ == "__main__":  
-            mesh_assembly() 
+            mesh_assembly()  
+            convert_cae_to_inp(cae_file_path = cae_file_path, job_name = f"{{model_name}}_job" )
         """) 
 
         with open(script_path, "w") as file: 
