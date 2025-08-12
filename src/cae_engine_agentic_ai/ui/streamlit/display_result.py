@@ -119,7 +119,6 @@ class DisplayResultStreamlit:
         elif "analyse_all_parts" in st.session_state.response["tool_called"]: 
             st.header("All Parts and Elsets Analyser 🔍")
 
-            # Clear previous session state if switching to this tool anew
             if st.session_state.get("current_tool") != "analyse_all_parts":
                 st.session_state.df_master = pd.DataFrame()
                 st.session_state.image_path_list = []
@@ -187,6 +186,28 @@ class DisplayResultStreamlit:
 
                 if selected_image_path:
                     st.image(os.path.normpath(selected_image_path), caption="Contour Plot", use_column_width=True)
+
+        
+        elif "assign_material_properties" in st.session_state.response["tool_called"]: 
+            st.header("Assign Material Properties🔍")
+
+            if st.session_state.get("current_tool") != "assign_material_properties":
+                st.session_state.current_tool = "assign_material_properties"
+                st.session_state.existing_materials_list = [] 
+                st.session_state.part_names = []
+
+            inp_file_path, model_name = self.tasks.ask_inp_model_name_inputs()  
+
+            if st.button("Open Material Assigner"):
+                existing_materials_list, part_names = self.tasks.extract_materials_and_parts(model_name= model_name, inp_file_path=inp_file_path)
+                st.session_state.existing_materials_list = existing_materials_list 
+                st.session_state.part_names = part_names
+
+            self.tasks.ask_material_assignment_inputs(
+                existing_materials_list= st.session_state.existing_materials_list, 
+                part_names = st.session_state.part_names
+            )
+           
         
         else: 
             return 

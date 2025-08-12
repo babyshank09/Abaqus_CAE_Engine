@@ -7,7 +7,7 @@ from azure.identity import DefaultAzureCredential
 class OpenAILLM():     
     def __init__(self, user_controls_input): 
         self.user_controls_input = user_controls_input     
-        self.tools = [Tools.generate_inp_scripts, Tools.cad_to_mesh_assembly, Tools.cad_to_mesh, Tools.analyse_all_parts, Tools.analyse_single_part]
+        self.tools = [Tools.generate_inp_scripts, Tools.cad_to_mesh_assembly, Tools.cad_to_mesh, Tools.analyse_all_parts, Tools.analyse_single_part, Tools.assign_material_properties]
 
 
     def get_llm_model(self):  

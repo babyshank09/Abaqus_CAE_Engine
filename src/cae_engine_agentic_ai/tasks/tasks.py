@@ -3,6 +3,7 @@ from typing import Optional
 import streamlit as st
 import pandas as pd
 import openpyxl
+import json 
 
 
 class Tasks: 
@@ -1780,5 +1781,215 @@ class Tasks:
 
         except Exception as e:
             st.error(f"⚠️ An error occurred: {str(e)}")
+
+
+
+
+
+
+
+
+
+    def extract_existing_materials(self, model_name, input_inp_path):
+        import textwrap  
+        import os
+        import subprocess  
+        
+        base_dir = os.path.abspath(self.working_dir)
+        executions_dir = os.path.join(base_dir, "Executions")
+        results_dir = os.path.join(base_dir, "Results")
+        
+        os.makedirs(executions_dir, exist_ok=True)
+        os.makedirs(results_dir, exist_ok=True)
+        
+        script_dir = executions_dir
+        script_path = os.path.join(script_dir, "extract_existing_materials.py") 
+
+        code =textwrap.dedent(f"""
+        from abaqus import *
+        from abaqusConstants import *
+        import os 
+        import json 
+
+        def check_existing_material(model_name, input_inp_path):
+            mdb.ModelFromInputFile(name=model_name, inputFileName=input_inp_path)
+            model = mdb.models[model_name]
+
+            material_list = list(model.materials.keys())
+            print(material_list)  
+            
+            data ={{"Existing_Materials": material_list}}
+            
+            material_list_path = os.path.join(r"{results_dir}", "existing_materials.json")
+            with open(material_list_path, "w") as f:
+                json.dump(data, f, indent=4) 
+
+            print(f"The existing Materials are: {{material_list}}") 
+        
+        if __name__ == "__main__":
+            inp_path = r"{input_inp_path}"
+            model_name = "{model_name}"
+
+            check_existing_material(model_name, inp_path)
+        """) 
+
+        with open(script_path, "w") as file: 
+                file.write(code) 
+
+        print(f"\nPython script successfully created at: {script_path}\n")
+        
+        current_working_dir = executions_dir
+        abaqus_command = ["abaqus", "cae", f"noGUI=extract_existing_materials.py"]
+        subprocess.run(abaqus_command, cwd= current_working_dir, check=True, capture_output=True, text=True, shell=True)
+        
+        material_list_path = os.path.join(results_dir, "existing_materials.json")
+
+        if os.path.exists(material_list_path):
+            with open(material_list_path, "r") as f:
+                data = json.load(f)   
+
+            return data["Existing_Materials"] 
+        else:
+            print(f"{material_list_path} does not exist.")
+
+
+    
+    def extract_part_names(self, model_name, input_inp_path):
+        import textwrap  
+        import os
+        import subprocess  
+       
+        base_dir = os.path.abspath(self.working_dir)
+        executions_dir = os.path.join(base_dir, "Executions")
+        results_dir = os.path.join(base_dir, "Results")
+
+        os.makedirs(executions_dir, exist_ok=True)
+        os.makedirs(results_dir, exist_ok=True)
+
+        script_dir = executions_dir
+        script_path = os.path.join(script_dir, "extract_part_names.py") 
+
+        code =textwrap.dedent(f"""
+        from abaqus import *
+        from abaqusConstants import *
+        import os 
+        import json 
+                             
+        def print_part_names(model_name, input_inp_path):
+            mdb.ModelFromInputFile(name=model_name, inputFileName=input_inp_path)
+            model = mdb.models[model_name]
+
+            part_list = model.parts.keys()
+            print(part_list) 
+                             
+            data ={{"Part_Names": part_list}}
+            
+            part_list_path = os.path.join(r"{results_dir}", "parts.json")
+            with open(part_list_path, "w") as f:    
+                json.dump(data, f, indent=4)  
+
+            print(f"The existing Parts are: {{part_list}}")                  
+        
+        if __name__ == "__main__":
+            inp_path = r"{input_inp_path}"
+            model_name = "{model_name}"
+
+            print_part_names(model_name, inp_path)
+        """) 
+
+        with open(script_path, "w") as file: 
+                file.write(code) 
+
+        print(f"\nPython script successfully created at: {script_path}\n")
+        
+        current_working_dir = executions_dir
+        abaqus_command = ["abaqus", "cae", f"noGUI=extract_part_names.py"]
+        subprocess.run(abaqus_command, cwd= current_working_dir, check=True, capture_output=True, text=True, shell=True)
+        
+        part_list_path = os.path.join(results_dir, "parts.json")
+
+        if os.path.exists(part_list_path):
+            with open(part_list_path, "r") as f:
+                data = json.load(f)   
+
+            return data["Part_Names"] 
+        else:
+            print(f"{part_list_path} does not exist.")
+    
+
+
+    def ask_inp_model_name_inputs(self):  
+
+        if "inp_file_path" not in st.session_state: 
+            st.session_state.inp_file_path = ""
+        if "model_name" not in st.session_state:
+            st.session_state.model_name = ""
+
+        inp_file_path= st.text_input(
+            "Input File Location (e.g., path/to/file.inp)",
+            value=st.session_state.inp_file_path,
+            key="inp_file_path_input"
+        )  
+        model_name = st.text_input(
+            "Model Name",
+            value=st.session_state.model_name,
+            key="model_name_input"
+        ) 
+
+        return inp_file_path, model_name 
+        
+
+   
+    def extract_materials_and_parts(self, model_name, inp_file_path):
+        existing_materials_list = self.extract_existing_materials(model_name, input_inp_path= inp_file_path) 
+        part_names = self.extract_part_names(model_name, input_inp_path= inp_file_path)  
+
+        return existing_materials_list, part_names
+
+
+
+    def ask_material_assignment_inputs(self, existing_materials_list, part_names):
+
+        for i, part_name in enumerate(part_names, start=1):
+            st.subheader(part_name)
+            material = st.selectbox(f"{part_name} Material", ["STEEL", "ALUMINUM", "COPPER", "IRON"])
+
+            if material in existing_materials_list:
+                st.info("This material already defined. Continuing will modify the already existing material")
+
+            col1, col2, col3, col4 = st.columns(4)
+            col1.markdown("**Elastic Properties:**")
+            col1.write(" ")
+            col1.write(" ")
+            col1.write(" ")
+            e = col2.text_input("Young's Modulus", key = f"{part_name}_e")
+            p = col3.text_input("Poisson's Ratio", key = f"{part_name}_p")
+            d = col4.text_input("Density",key = f"{part_name}_d")
+  
+            col1.markdown("**Plastic Properties:**")
+            y = col2.text_input("Yeild1", key = f"{part_name}_y1")
+            ps1 = col3.text_input("Plastic Strain1", key = f"{part_name}_ps1")
+            t1 = col4.text_input("temp1",key = f"{part_name}_t1")
+
+            y2 = col2.text_input("Yeild2", key = f"{part_name}_y2")
+            ps2 = col3.text_input("Plastic Strain2", key = f"{part_name}_ps2")
+            t2 = col4.text_input("temp2",key = f"{part_name}t2")
+
+ 
+
+        # st.session_state.stp_file_path = stp_file_path
+        # st.session_state.mesh_size = mesh_size
+        # st.session_state.model_name = model_name
+        # st.session_state.part_name = part_name
+        # st.session_state.element_type = element_type
+
+        # return {
+        #     "stp_file_path": stp_file_path,
+        #     "mesh_size": mesh_size,
+        #     "model_name": model_name,
+        #     "part_name": part_name,
+        #     "element_type": element_type
+        # }
+
 
 

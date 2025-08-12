@@ -10,7 +10,7 @@ class GraphBuilder:
     def __init__(self, model_with_tools): 
         self.llm_with_tools =  model_with_tools 
         self.graph_builder= StateGraph(State)   
-        self.tools = [Tools.generate_inp_scripts, Tools.cad_to_mesh_assembly, Tools.cad_to_mesh, Tools.analyse_all_parts, Tools.analyse_single_part]
+        self.tools = [Tools.generate_inp_scripts, Tools.cad_to_mesh_assembly, Tools.cad_to_mesh, Tools.analyse_all_parts, Tools.analyse_single_part, Tools.assign_material_properties]
 
 
     def build_cae_engine_graph(self): 

@@ -67,7 +67,21 @@ class Tools:
         after executing this and nothing before executing this...
         Note: This fetches results only for the given part/instance and elset, not across all parts.
         """
-        pass
+        pass 
+    
+
+    def assign_material_properties():
+        """
+        Initiates the workflow for assigning material properties to a specified part or set of parts within the current model.
+        This tool does not directly assign the properties but triggers the setup process where the user will define material
+        parameters such as elastic modulus, Poisson's ratio, density, or any other relevant attributes. The actual assignment
+        will occur in the subsequent steps of the workflow.
+        Execute this tool whenever the user wants to assign or modify material properties for a specific part,
+        multiple parts, or a material definition within the model, or inquires whether this task can be performed.
+        Display the message that the process has started only after this function is executed, and not before.
+        Note: This tool initiates the process for assigning material properties but does not perform the assignment itself.
+        """
+        pass 
 
 
 
