@@ -3,7 +3,7 @@ from typing import Optional
 import streamlit as st
 import pandas as pd
 import openpyxl
-import json 
+import json  
 
 
 class Tasks: 
@@ -1950,32 +1950,82 @@ class Tasks:
 
     def ask_material_assignment_inputs(self, existing_materials_list, part_names):
 
+        material_database = pd.read_excel("src/cae_engine_agentic_ai/knowledge/Material_Properties_Database.xlsx") 
+        material_list = sorted(material_database['Name'].dropna().unique())
+        material_list.insert(0, "CUSTOM MATERIAL")
+
+        st.write(f"Length of Material List: {len(material_list)}")
+        properties ={}
+
         for i, part_name in enumerate(part_names, start=1):
             st.subheader(part_name)
-            material = st.selectbox(f"{part_name} Material", ["STEEL", "ALUMINUM", "COPPER", "IRON"])
+            selected_material = st.selectbox(f"{part_name} Material", material_list)
 
-            if material in existing_materials_list:
-                st.info("This material already defined. Continuing will modify the already existing material")
+            if selected_material == "CUSTOM MATERIAL": 
+                col1, col2, col3, col4 = st.columns(4)
+                col1.markdown("**Elastic Properties:**")
+                col1.write(" ")
+                col1.write(" ")
+                col1.write(" ")
+                e = col2.text_input("Young's Modulus", key = f"{part_name}_e")
+                p = col3.text_input("Poisson's Ratio", key = f"{part_name}_p")
+                d = col4.text_input("Density",key = f"{part_name}_d")
+    
+                col1.markdown("**Plastic Properties:**")
+                y1 = col2.text_input("Yeild1", key = f"{part_name}_y1")
+                ps1 = col3.text_input("Plastic Strain1", key = f"{part_name}_ps1")
+                t1 = col4.text_input("Temp1",key = f"{part_name}_t1")
 
-            col1, col2, col3, col4 = st.columns(4)
-            col1.markdown("**Elastic Properties:**")
-            col1.write(" ")
-            col1.write(" ")
-            col1.write(" ")
-            e = col2.text_input("Young's Modulus", key = f"{part_name}_e")
-            p = col3.text_input("Poisson's Ratio", key = f"{part_name}_p")
-            d = col4.text_input("Density",key = f"{part_name}_d")
-  
-            col1.markdown("**Plastic Properties:**")
-            y = col2.text_input("Yeild1", key = f"{part_name}_y1")
-            ps1 = col3.text_input("Plastic Strain1", key = f"{part_name}_ps1")
-            t1 = col4.text_input("temp1",key = f"{part_name}_t1")
+                y2 = col2.text_input("Yeild2", key = f"{part_name}_y2")
+                ps2 = col3.text_input("Plastic Strain2", key = f"{part_name}_ps2")
+                t2 = col4.text_input("Temp2",key = f"{part_name}t2")
 
-            y2 = col2.text_input("Yeild2", key = f"{part_name}_y2")
-            ps2 = col3.text_input("Plastic Strain2", key = f"{part_name}_ps2")
-            t2 = col4.text_input("temp2",key = f"{part_name}t2")
+            else:
+                if selected_material in existing_materials_list:
+                    st.info("This material already defined in the model. Modifying the properties will change the defined material")
+                
+                Density	= material_database.loc[material_database['Name'] == selected_material, 'Density'].iloc[0]
+                Y_mod = material_database.loc[material_database['Name'] == selected_material, 'E'].iloc[0]
+                Nu = material_database.loc[material_database['Name'] == selected_material, 'Nu'].iloc[0]	
+                YieldStress1 = material_database.loc[material_database['Name'] == selected_material, 'YieldStress1'].iloc[0]		
+                PlasticStrain1 = material_database.loc[material_database['Name'] == selected_material, 'PlasticStrain1'].iloc[0]
+                Temp1 = material_database.loc[material_database['Name'] == selected_material, 'Temp1'].iloc[0]
+                YieldStress2 = material_database.loc[material_database['Name'] == selected_material, 'YieldStress2'].iloc[0]
+                PlasticStrain2 = material_database.loc[material_database['Name'] == selected_material, 'PlasticStrain2'].iloc[0]
+                Temp2 = material_database.loc[material_database['Name'] == selected_material, 'Temp2'].iloc[0]
 
- 
+                col1, col2, col3, col4 = st.columns(4)
+                col1.markdown("**Elastic Properties:**")
+                col1.write(" ")
+                col1.write(" ")
+                col1.write(" ")
+                e = col2.text_input("Young's Modulus", value = Y_mod, key = f"{part_name}_e")
+                p = col3.text_input("Poisson's Ratio", value = Nu, key = f"{part_name}_p")
+                d = col4.text_input("Density", value = Density, key = f"{part_name}_d")
+    
+                col1.markdown("**Plastic Properties:**")
+                y1 = col2.text_input("Yeild1", value = "" if YieldStress1 is None else str(YieldStress1), key = f"{part_name}_y1")
+                ps1 = col3.text_input("Plastic Strain1", value = "" if PlasticStrain1 is None else str(PlasticStrain1), key = f"{part_name}_ps1")
+                t1 = col4.text_input("Temp1", value = "" if Temp1 is None else str(Temp1), key = f"{part_name}_t1")
+
+                y2 = col2.text_input("Yeild2", value = "" if YieldStress2 is None else str(YieldStress2), key = f"{part_name}_y2")
+                ps2 = col3.text_input("Plastic Strain2", value = "" if PlasticStrain2 is None else str(PlasticStrain2), key = f"{part_name}_ps2")
+                t2 = col4.text_input("Temp2", value = "" if Temp2 is None else str(Temp2), key = f"{part_name}t2")
+            
+            properties[part_name] = {
+                "Young's Modulus": None if e == "" else float(e),
+                "Poisson's Ratio": None if p == "" else float(p),
+                "Density": None if d == "" else float(d),
+                "Yeild1": None if y1 == "" else float(y1),
+                "Plastic Strain1": None if ps1 == "" else float(ps1),
+                "Temp1": None if t1 == "" else float(t1),
+                "Yeild2": None if y2 == "" else float(y2),
+                "Plastic Strain2":  None if ps1 == "" else float(ps2),
+                "Temp2":  None if t2 == "" else float(t2)
+                }
+        
+        st.write(properties)
+
 
         # st.session_state.stp_file_path = stp_file_path
         # st.session_state.mesh_size = mesh_size

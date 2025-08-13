@@ -20,7 +20,7 @@ class LoadStreamlitUI:
             usecase_options = self.config.get_usecase_options() 
             self.user_controls["selected_usecase"] = st.selectbox("Select Use Case", usecase_options)   
 
-            self.user_controls["working_dir"] = st.text_input("Working Directory", value = r"") 
+            self.user_controls["working_dir"] = st.text_input("Working Directory", value = "") 
             
             llm_options = self.config.get_llm_options()  
             self.user_controls["selected_llm"] = st.selectbox("Select LLM Service Provider", llm_options)  
