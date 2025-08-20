@@ -189,26 +189,29 @@ class DisplayResultStreamlit:
 
         
         elif "assign_material_properties" in st.session_state.response["tool_called"]: 
-            st.header("Assign Material Properties🔍")
+            st.header("Assign Material Properties🪨")
 
             if st.session_state.get("current_tool") != "assign_material_properties":
                 st.session_state.current_tool = "assign_material_properties"
                 st.session_state.existing_materials_list = [] 
-                st.session_state.part_names = []
+                st.session_state.part_names = [] 
 
             inp_file_path, model_name = self.tasks.ask_inp_model_name_inputs()  
-
+            
             if st.button("Open Material Assigner"):
-                existing_materials_list, part_names = self.tasks.extract_materials_and_parts(model_name= model_name, inp_file_path=inp_file_path)
-                st.session_state.existing_materials_list = existing_materials_list 
-                st.session_state.part_names = part_names
+                with st.spinner("Processing your request..."): 
+                    existing_materials_list, part_names = self.tasks.extract_materials_and_parts(model_name= model_name, inp_file_path=inp_file_path)
+                    st.session_state.existing_materials_list = existing_materials_list 
+                    st.session_state.part_names = part_names 
 
             self.tasks.ask_material_assignment_inputs(
                 existing_materials_list= st.session_state.existing_materials_list, 
                 part_names = st.session_state.part_names
-            )
-           
-        
+            ) 
+            
+            if st.button("Submit Values"): 
+                self.tasks.assign_material_properties_tasks(inp_file_path = inp_file_path, model_name= model_name)
+
         else: 
             return 
 

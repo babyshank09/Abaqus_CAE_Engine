@@ -1948,13 +1948,20 @@ class Tasks:
 
 
 
-    def ask_material_assignment_inputs(self, existing_materials_list, part_names):
+    def ask_material_assignment_inputs(self, existing_materials_list, part_names): 
+        import os 
+
+        base_dir = os.path.abspath(self.working_dir)
+        executions_dir = os.path.join(base_dir, "Executions")
+        results_dir = os.path.join(base_dir, "Results")
+
+        os.makedirs(executions_dir, exist_ok=True)
+        os.makedirs(results_dir, exist_ok=True)
 
         material_database = pd.read_excel("src/cae_engine_agentic_ai/knowledge/Material_Properties_Database.xlsx") 
         material_list = sorted(material_database['Name'].dropna().unique())
         material_list.insert(0, "CUSTOM MATERIAL")
 
-        st.write(f"Length of Material List: {len(material_list)}")
         properties ={}
 
         for i, part_name in enumerate(part_names, start=1):
@@ -1972,11 +1979,11 @@ class Tasks:
                 d = col4.text_input("Density",key = f"{part_name}_d")
     
                 col1.markdown("**Plastic Properties:**")
-                y1 = col2.text_input("Yeild1", key = f"{part_name}_y1")
+                y1 = col2.text_input("Yield1", key = f"{part_name}_y1")
                 ps1 = col3.text_input("Plastic Strain1", key = f"{part_name}_ps1")
                 t1 = col4.text_input("Temp1",key = f"{part_name}_t1")
 
-                y2 = col2.text_input("Yeild2", key = f"{part_name}_y2")
+                y2 = col2.text_input("Yield2", key = f"{part_name}_y2")
                 ps2 = col3.text_input("Plastic Strain2", key = f"{part_name}_ps2")
                 t2 = col4.text_input("Temp2",key = f"{part_name}t2")
 
@@ -2004,42 +2011,213 @@ class Tasks:
                 d = col4.text_input("Density", value = Density, key = f"{part_name}_d")
     
                 col1.markdown("**Plastic Properties:**")
-                y1 = col2.text_input("Yeild1", value = "" if YieldStress1 is None else str(YieldStress1), key = f"{part_name}_y1")
+                y1 = col2.text_input("Yield1", value = "" if YieldStress1 is None else str(YieldStress1), key = f"{part_name}_y1")
                 ps1 = col3.text_input("Plastic Strain1", value = "" if PlasticStrain1 is None else str(PlasticStrain1), key = f"{part_name}_ps1")
                 t1 = col4.text_input("Temp1", value = "" if Temp1 is None else str(Temp1), key = f"{part_name}_t1")
 
-                y2 = col2.text_input("Yeild2", value = "" if YieldStress2 is None else str(YieldStress2), key = f"{part_name}_y2")
+                y2 = col2.text_input("Yield2", value = "" if YieldStress2 is None else str(YieldStress2), key = f"{part_name}_y2")
                 ps2 = col3.text_input("Plastic Strain2", value = "" if PlasticStrain2 is None else str(PlasticStrain2), key = f"{part_name}_ps2")
                 t2 = col4.text_input("Temp2", value = "" if Temp2 is None else str(Temp2), key = f"{part_name}t2")
+
+            section_type = st.radio(
+                f"{part_name} Section Type",
+                ["Solid", "Shell"]
+            )
             
             properties[part_name] = {
-                "Young's Modulus": None if e == "" else float(e),
-                "Poisson's Ratio": None if p == "" else float(p),
-                "Density": None if d == "" else float(d),
-                "Yeild1": None if y1 == "" else float(y1),
-                "Plastic Strain1": None if ps1 == "" else float(ps1),
-                "Temp1": None if t1 == "" else float(t1),
-                "Yeild2": None if y2 == "" else float(y2),
-                "Plastic Strain2":  None if ps1 == "" else float(ps2),
-                "Temp2":  None if t2 == "" else float(t2)
-                }
+                "Material": selected_material, 
+                "Section Type": section_type, 
+                "Young's Modulus": None if (e == "" or str(e).lower() == "nan") else float(e),
+                "Poisson's Ratio": None if (p == "" or str(p).lower() == "nan") else float(p),
+                "Density": None if (d == "" or str(d).lower() == "nan") else float(d),
+                "Yield1": None if (y1 == "" or str(y1).lower() == "nan") else float(y1),
+                "Plastic Strain1": None if (ps1 == "" or str(ps1).lower() == "nan") else float(ps1),
+                "Temp1": None if (t1 == "" or str(t1).lower() == "nan") else float(t1),
+                "Yield2": None if (y2 == "" or str(y2).lower() == "nan") else float(y2),
+                "Plastic Strain2": None if (ps2 == "" or str(ps2).lower() == "nan") else float(ps2),
+                "Temp2": None if (t2 == "" or str(t2).lower() == "nan") else float(t2) 
+            }
+
+        part_material_properties_path = os.path.join(results_dir, "part_material_properties.json")
+        with open(part_material_properties_path, "w") as f:    
+            json.dump(properties, f, indent=4)  
+    
+
+
+    def assign_material_properties_tasks(self, inp_file_path, model_name): 
+        import textwrap  
+        import os
+        import subprocess  
         
-        st.write(properties)
+        base_dir = os.path.abspath(self.working_dir)
+        executions_dir = os.path.join(base_dir, "Executions")
+        results_dir = os.path.join(base_dir, "Results")
+
+        os.makedirs(executions_dir, exist_ok=True)
+        os.makedirs(results_dir, exist_ok=True)
+
+        script_dir = executions_dir
+        script_path = os.path.join(script_dir, "material_assignment.py")  
+
+        code =textwrap.dedent(f"""
+        from abaqus import *
+        from abaqusConstants import *
+        import os 
+        import json 
 
 
-        # st.session_state.stp_file_path = stp_file_path
-        # st.session_state.mesh_size = mesh_size
-        # st.session_state.model_name = model_name
-        # st.session_state.part_name = part_name
-        # st.session_state.element_type = element_type
+        def create_model(model_name, input_inp_path):
 
-        # return {
-        #     "stp_file_path": stp_file_path,
-        #     "mesh_size": mesh_size,
-        #     "model_name": model_name,
-        #     "part_name": part_name,
-        #     "element_type": element_type
-        # }
+            mdb.ModelFromInputFile(name=model_name, inputFileName=input_inp_path)
+            model = mdb.models[model_name]
+        
+            print(model.materials)
+            return model 
+
+
+
+        def modify_or_create_material(model, part_name, material_name, section_type, density, y_mod, u, y1, ps1, t1, y2, ps2, t2):
+
+            if material_name in model.materials.keys():
+                material = model.materials[material_name]
+                print(f"Modified existing material '{{material_name}}'")
+            else:
+                material = model.Material(name=material_name)
+                print(f"Created new material '{{material_name}}'")
+
+            new_elastic = (y_mod, u) 
+
+            material.Elastic(table=(new_elastic,))
+            material.Density(table=((density,),)) 
+
+            
+                # ---- Plastic Behavior ----
+            if y1 is None or ps1 is None:
+                print("in condition 1 (no plasticity defined)")
+
+            elif (y1 is not None and ps1 is not None and t1 is None 
+                and (y2 is None or ps2 is None)):
+                print("in condition 2 (1 yield, no temp, no 2nd yield)")
+                new_plastic1 = (y1, ps1)
+                material.Plastic(temperatureDependency=OFF, scaleStress=None, table=(new_plastic1,))
+
+            elif (y1 is not None and ps1 is not None and t1 is not None 
+                and (y2 is None or ps2 is None)):
+                print("in condition 3 (1 yield with temp)")
+                new_plastic1 = (y1, ps1, t1)
+                material.Plastic(temperatureDependency=ON, scaleStress=None, table=(new_plastic1,))
+
+            elif (y1 is not None and ps1 is not None and y2 is not None and ps2 is not None 
+                and (t1 is None or t2 is None)):
+                print("in condition 4 (2 yields, no temp)")
+                new_plastic1 = (y1, ps1)
+                new_plastic2 = (y2, ps2)
+                material.Plastic(temperatureDependency=OFF, scaleStress=None, table=(new_plastic1, new_plastic2))
+
+            elif (y1 is not None and ps1 is not None and t1 is not None 
+                and y2 is not None and ps2 is not None and t2 is not None):
+                print("in condition 5 (2 yields with both temps)")
+                new_plastic1 = (y1, ps1, t1)
+                new_plastic2 = (y2, ps2, t2)
+                material.Plastic(temperatureDependency=ON, scaleStress=None, table=(new_plastic1, new_plastic2))
+
+            
+            
+            section_name = material_name + "_Section"
+            if section_type == "Solid":
+                model.HomogeneousSolidSection(name=section_name, material=material_name)
+                print(f"Solid Homogenous Section '{{section_name}}' created.")  
+            elif section_type == "Shell": 
+                model.HomogeneousShellSection(name=section_name, 
+                preIntegrate=OFF, material=material_name, thicknessType=UNIFORM, 
+                thickness=5.0, thicknessField='', nodalThicknessField='', 
+                idealization=NO_IDEALIZATION, poissonDefinition=DEFAULT, 
+                thicknessModulus=None, temperature=GRADIENT, useDensity=OFF, 
+                    integrationRule=SIMPSON, numIntPts=5)
+                
+
+
+            part = model.parts[part_name]
+            print(f"Now in {{part_name}}")
+
+            for elset_name, elset_obj in part.sets.items():
+
+                part.SectionAssignment(
+                    region=elset_obj,
+                    sectionName=section_name
+                )
+
+                print(f"Section '{{section_name}}' assigned to set '{{elset_name}}' in part '{{part_name}}'.")
+            
+
+            model.sections[section_name].setValues(
+                    material=material_name, thickness=1.0)
+        
+
+        def save_cae_file(job_name, results_dir): 
+            cae_file = os.path.join(results_dir, f"{{job_name}}.cae")
+            mdb.saveAs(pathName=cae_file)
+            print(f"Saved modified model to {{cae_file}}")   
+
+
+        def save_inp_file(model_name, results_dir): 
+            job_name = f"{{model_name}}_job"
+            os.chdir(results_dir)
+            mdb.Job(name=job_name, model=model_name)
+            mdb.jobs[job_name].writeInput(consistencyChecking=OFF)
+            
+            inp_file = os.path.join(results_dir, "material_assigned_model.inp")
+            print(f"Saved the model to {{inp_file}}")  
+            
+            return job_name
+
+
+
+
+        if __name__ == "__main__":
+            inp_path = os.path.normpath(r"{inp_file_path}")
+            model_name = "{model_name}" 
+            results_dir = r"{results_dir}" 
+            materials_property_path = os.path.join(results_dir, "part_material_properties.json")
+
+            
+            with open(materials_property_path, "r") as f:
+                properties = json.load(f) 
+
+            model = create_model(model_name, inp_path) 
+
+            for part_name, material_properties in properties.items():  
+                modify_or_create_material(model= model, 
+                                        part_name = part_name, 
+                                        material_name = material_properties["Material"], 
+                                        section_type = material_properties["Section Type"], 
+                                        density = material_properties["Density"],
+                                        y_mod = material_properties["Young's Modulus"],
+                                        u = material_properties["Poisson's Ratio"], 
+                                        y1 = material_properties["Yield1"],
+                                        ps1 = material_properties["Plastic Strain1"],
+                                        t1 = material_properties["Temp1"],
+                                        y2 = material_properties["Yield2"],
+                                        ps2 = material_properties["Plastic Strain2"],
+                                        t2 = material_properties["Temp2"]
+                                        ) 
+
+            job_name = save_inp_file(model_name= model_name, results_dir = results_dir) 
+            save_cae_file(job_name = job_name, results_dir = results_dir) 
+        """) 
+
+        with open(script_path, "w") as file: 
+            file.write(code) 
+
+        print(f"\nPython script successfully created at: {script_path}\n")
+        
+        current_working_dir = executions_dir
+        abaqus_command = ["abaqus", "cae", f"noGUI=material_assignment.py"]
+        subprocess.run(abaqus_command, cwd= current_working_dir, check=True, capture_output=True, text=True, shell=True)
+
+
+
+
 
 
 
