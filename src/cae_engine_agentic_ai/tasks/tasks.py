@@ -2091,7 +2091,7 @@ class Tasks:
             material.Density(table=((density,),)) 
 
             
-                # ---- Plastic Behavior ----
+            # ---- Plastic Behavior ----
             if y1 is None or ps1 is None:
                 print("in condition 1 (no plasticity defined)")
 
@@ -2123,7 +2123,11 @@ class Tasks:
 
             
             
-            section_name = material_name + "_Section"
+            section_name = material_name + "_Section" 
+            if section_name in model.sections.keys():
+                print(f"Section '{{section_name}}' already exists. Modifying...")
+                del model.sections[section_name] 
+                              
             if section_type == "Solid":
                 model.HomogeneousSolidSection(name=section_name, material=material_name)
                 print(f"Solid Homogenous Section '{{section_name}}' created.")  
@@ -2159,14 +2163,14 @@ class Tasks:
             mdb.saveAs(pathName=cae_file)
             print(f"Saved modified model to {{cae_file}}")   
 
-
+ 
         def save_inp_file(model_name, results_dir): 
             job_name = f"{{model_name}}_job"
             os.chdir(results_dir)
             mdb.Job(name=job_name, model=model_name)
             mdb.jobs[job_name].writeInput(consistencyChecking=OFF)
             
-            inp_file = os.path.join(results_dir, "material_assigned_model.inp")
+            inp_file = os.path.join(results_dir, f"{{job_name}}.inp")
             print(f"Saved the model to {{inp_file}}")  
             
             return job_name
