@@ -1854,7 +1854,7 @@ class Tasks:
 
 
     
-    def extract_part_names(self, model_name, input_inp_path):
+    def extract_part_names_and_images(self, model_name, input_inp_path):
         import textwrap  
         import os
         import subprocess  
@@ -1867,17 +1867,23 @@ class Tasks:
         os.makedirs(results_dir, exist_ok=True)
 
         script_dir = executions_dir
-        script_path = os.path.join(script_dir, "extract_part_names.py") 
+        script_path = os.path.join(script_dir, "extract_part_names_and_images.py") 
 
         code =textwrap.dedent(f"""
         from abaqus import *
         from abaqusConstants import *
         import os 
         import json 
-                             
-        def print_part_names(model_name, input_inp_path):
+                              
+        def create_model(model_name, input_inp_path):
             mdb.ModelFromInputFile(name=model_name, inputFileName=input_inp_path)
             model = mdb.models[model_name]
+        
+            print(model.materials)
+            return model 
+
+                                
+        def print_part_names(model):
 
             part_list = model.parts.keys()
             print(part_list) 
@@ -1888,14 +1894,45 @@ class Tasks:
             with open(part_list_path, "w") as f:    
                 json.dump(data, f, indent=4)  
 
-            print(f"The existing Parts are: {{part_list}}")                  
-        
+            print(f"The existing Parts are: {{part_list}}")      
+
+            
+        def capture_part_images(model):
+            vp_name = 'TempViewport'
+            session.Viewport(name=vp_name)
+            vp = session.viewports[vp_name]
+
+            images_dir = os.path.join(r"{results_dir}", "Part_Images")
+            if not os.path.exists(images_dir):
+                os.makedirs(images_dir, exist_ok=True)
+
+            part_images = {{}} 
+
+            for part_name, part in model.parts.items():
+                print(f"Capturing image for part: {{part_name}}")
+
+                vp.setValues(displayedObject=part)
+                vp.view.fitView()
+
+                image_file = os.path.join(images_dir, f"{{part_name}}.png")
+                session.printToFile(fileName=image_file, format=PNG, canvasObjects=(vp,))
+                print(f"  -> Saved image as {{image_file}}")
+
+                part_images[part_name] = image_file 
+
+            part_images_path = os.path.join(r"{results_dir}", "parts_images.json")
+            with open(part_images_path, "w") as f:    
+                json.dump(part_images, f, indent=4)  
+
+
         if __name__ == "__main__":
             inp_path = r"{input_inp_path}"
             model_name = "{model_name}"
 
-            print_part_names(model_name, inp_path)
-        """) 
+            model = create_model(model_name, inp_path)
+            print_part_names(model)
+            capture_part_images(model)
+        """)
 
         with open(script_path, "w") as file: 
                 file.write(code) 
@@ -1903,16 +1940,24 @@ class Tasks:
         print(f"\nPython script successfully created at: {script_path}\n")
         
         current_working_dir = executions_dir
-        abaqus_command = ["abaqus", "cae", f"noGUI=extract_part_names.py"]
+        abaqus_command = ["abaqus", "cae", f"noGUI=extract_part_names_and_images.py"]
         subprocess.run(abaqus_command, cwd= current_working_dir, check=True, capture_output=True, text=True, shell=True)
         
-        part_list_path = os.path.join(results_dir, "parts.json")
+        part_list_path = os.path.join(results_dir, "parts.json") 
+        part_images_path = os.path.join(results_dir, "parts_images.json")
 
+        exist= False
         if os.path.exists(part_list_path):
             with open(part_list_path, "r") as f:
-                data = json.load(f)   
+                part_data = json.load(f)    
+            exist= True 
 
-            return data["Part_Names"] 
+        if os.path.exists(part_images_path) and exist:
+            with open(part_images_path, "r") as f:
+                images_data = json.load(f)
+
+            return part_data["Part_Names"], images_data
+        
         else:
             print(f"{part_list_path} does not exist.")
     
@@ -1940,15 +1985,15 @@ class Tasks:
         
 
    
-    def extract_materials_and_parts(self, model_name, inp_file_path):
+    def extract_materials_and_parts_info(self, model_name, inp_file_path):
         existing_materials_list = self.extract_existing_materials(model_name, input_inp_path= inp_file_path) 
-        part_names = self.extract_part_names(model_name, input_inp_path= inp_file_path)  
+        part_names, part_images = self.extract_part_names_and_images(model_name, input_inp_path= inp_file_path)  
 
-        return existing_materials_list, part_names
+        return existing_materials_list, part_names, part_images
 
 
 
-    def ask_material_assignment_inputs(self, existing_materials_list, part_names): 
+    def ask_material_assignment_inputs(self, existing_materials_list, part_names, part_images): 
         import os 
 
         base_dir = os.path.abspath(self.working_dir)
@@ -1965,7 +2010,12 @@ class Tasks:
         properties ={}
 
         for i, part_name in enumerate(part_names, start=1):
-            st.subheader(part_name)
+            st.subheader(part_name) 
+            image_path = os.path.normpath(part_images.get(part_name, ""))
+
+            if image_path:
+                st.image(image_path, caption=f"{part_name}", use_column_width=True)
+                
             selected_material = st.selectbox(f"{part_name} Material", material_list)
 
             if selected_material == "CUSTOM MATERIAL": 
@@ -2165,12 +2215,12 @@ class Tasks:
 
  
         def save_inp_file(model_name, results_dir): 
-            job_name = f"{{model_name}}_job"
+            job_name = f"{{model_name}}_Material_Assigned"
             os.chdir(results_dir)
             mdb.Job(name=job_name, model=model_name)
             mdb.jobs[job_name].writeInput(consistencyChecking=OFF)
             
-            inp_file = os.path.join(results_dir, f"{{job_name}}.inp")
+            inp_file = os.path.join(results_dir, f"{{model_name}}_Material_Assigned.inp")
             print(f"Saved the model to {{inp_file}}")  
             
             return job_name
