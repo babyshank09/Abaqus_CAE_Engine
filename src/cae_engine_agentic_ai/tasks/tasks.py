@@ -2212,6 +2212,7 @@ class Tasks:
             cae_file = os.path.join(results_dir, f"{{job_name}}.cae")
             mdb.saveAs(pathName=cae_file)
             print(f"Saved modified model to {{cae_file}}")   
+            mdb.close() 
 
  
         def save_inp_file(model_name, results_dir): 
@@ -2221,7 +2222,12 @@ class Tasks:
             mdb.jobs[job_name].writeInput(consistencyChecking=OFF)
             
             inp_file = os.path.join(results_dir, f"{{model_name}}_Material_Assigned.inp")
-            print(f"Saved the model to {{inp_file}}")  
+            print(f"Saved the model to {{inp_file}}")   
+
+            temp_mesh_file = os.path.join(results_dir, "temp_mesh.inp")
+            if os.path.exists(temp_mesh_file):
+                os.remove(temp_mesh_file) 
+                print(f"Removed temporary file: {{temp_mesh_file}}") 
             
             return job_name
 
@@ -2257,7 +2263,8 @@ class Tasks:
                                         ) 
 
             job_name = save_inp_file(model_name= model_name, results_dir = results_dir) 
-            save_cae_file(job_name = job_name, results_dir = results_dir) 
+            save_cae_file(job_name = job_name, results_dir = results_dir)  
+
         """) 
 
         with open(script_path, "w") as file: 
@@ -2270,8 +2277,316 @@ class Tasks:
         subprocess.run(abaqus_command, cwd= current_working_dir, check=True, capture_output=True, text=True, shell=True)
 
 
+    
 
 
 
 
+    def cad_to_inp_task(self, step_file_path, model_name, mesh_size, element_type):
+        import os
+        import subprocess
+        import textwrap
 
+        base_dir = os.path.abspath(self.working_dir)
+        executions_dir = os.path.join(base_dir, "Executions")
+        results_dir = os.path.join(base_dir, "Results")
+
+        os.makedirs(executions_dir, exist_ok=True)
+        os.makedirs(results_dir, exist_ok=True)
+
+        script_dir = executions_dir
+        script_path = os.path.join(script_dir, "CAD_Mesh_Material.py") 
+
+
+        code= textwrap.dedent(f"""
+        # -*- coding: mbcs -*-
+        from abaqus import *
+        from abaqusConstants import *
+        import part, material, assembly, step, mesh
+        import section, regionToolset
+        import os
+
+
+        def mesh_assembly(step_file_path, model_name, mesh_size, element_type, results_dir):
+            print("AUTOMATIC STEP FILE IMPORT")
+
+
+            step_geometry = mdb.openStep(fileName=step_file_path)
+            num_parts_in_file = step_geometry.numberOfParts
+            print("STEP file contains: %d parts" % num_parts_in_file)
+
+
+            if model_name in mdb.models:
+                del mdb.models[model_name]
+            mdb.Model(name=model_name)
+            model = mdb.models[model_name]
+            print("Created model: %s" % model_name)
+
+
+            print("Importing parts...")
+            imported_parts = []
+            failed_imports = []
+
+            for i in range(1, num_parts_in_file + 1):
+                try:
+                    part_name = "Part_%d" % i
+                    model.PartFromGeometryFile(
+                        name=part_name,
+                        geometryFile=step_geometry,
+                        bodyNum=i,
+                        combine=False,
+                        dimensionality=THREE_D,
+                        type=DEFORMABLE_BODY,
+                        scale=1.0
+                    )
+                    imported_parts.append(part_name)
+                    print("Imported: %s" % part_name)
+
+                except Exception as e:
+                    failed_imports.append(i)
+                    print("Failed Part %d: %s" % (i, str(e)))
+
+            print("Successfully imported: %d parts" % len(imported_parts))
+
+
+            valid_parts = []
+            for part_name in imported_parts:
+                part_obj = model.parts[part_name]
+                num_cells = len(part_obj.cells)
+                num_faces = len(part_obj.faces)
+
+                if num_cells > 0 or num_faces > 0:
+                    valid_parts.append(part_name)
+
+            print("Valid parts for meshing: %d" % len(valid_parts))
+
+
+            print("Creating assembly...")
+            assembly = model.rootAssembly
+
+            created_instances = []
+            for part_name in valid_parts:
+                try:
+                    instance_name = "%s_Instance" % part_name
+                    assembly.Instance(
+                        name=instance_name,
+                        part=model.parts[part_name],
+                        dependent=OFF 
+                    )
+                    created_instances.append(instance_name)
+                    print("Created instance: %s" % instance_name)
+                except Exception as e:
+                    print("Failed instance %s: %s" % (part_name, str(e)))
+
+
+            print("Meshing at assembly level...")
+            meshed_instances = []
+            total_elements = 0
+            total_nodes = 0
+            elem = False 
+
+            for instance_name in created_instances:
+                try:
+                    instance = assembly.instances[instance_name]
+
+
+                    assembly.seedPartInstance(
+                        regions=(instance,),
+                        size=mesh_size,
+                        deviationFactor=0.1,
+                        minSizeFactor=0.1
+                    )
+
+                
+                    cells = instance.cells
+                    if len(cells) > 0:
+                        try:
+                            if element_type in ["C3D8R", "C3D8I"]:
+                                assembly.setMeshControls(
+                                    regions=cells,
+                                    technique=STRUCTURED,
+                                    elemShape=HEX 
+                                )
+                                elem =True
+                            else:
+                                assembly.setMeshControls(
+                                    regions=cells,
+                                    technique=FREE,
+                                    elemShape=TET
+                                )   
+                                elem =False
+
+                        except:  
+                            assembly.setMeshControls(
+                                    regions=cells,
+                                    technique=FREE,
+                                    elemShape=TET
+                                )  
+                            elem =False
+
+                        
+                        if element_type == "C3D10":
+                            elem_type = mesh.ElemType(elemCode=C3D10, elemLibrary=STANDARD)
+                        elif element_type == "C3D4":
+                            elem_type = mesh.ElemType(elemCode=C3D4, elemLibrary=STANDARD) 
+                        elif element_type == "C3D8R" and not elem:
+                            elem_type = mesh.ElemType(elemCode=C3D10M, elemLibrary=STANDARD)  
+                        elif element_type == "C3D8I"and not elem:
+                            elem_type = mesh.ElemType(elemCode=C3D10M, elemLibrary=STANDARD) 
+                        elif element_type == "C3D8R" and elem:
+                            elem_type = mesh.ElemType(elemCode=C3D8R, elemLibrary=STANDARD)  
+                        elif element_type == "C3D8I"and elem:
+                            elem_type = mesh.ElemType(elemCode=C3D8I, elemLibrary=STANDARD) 
+                        elif element_type == "C3D10M":
+                            elem_type = mesh.ElemType(elemCode=C3D10M, elemLibrary=STANDARD)
+                        elif element_type == "C3D10HS":
+                            elem_type = mesh.ElemType(elemCode=C3D10HS, elemLibrary=STANDARD) 
+                        else:
+                            elem_type = mesh.ElemType(elemCode=C3D10M, elemLibrary=STANDARD)
+
+
+                        region = regionToolset.Region(cells=cells)
+                        assembly.setElementType(regions=region, elemTypes=(elem_type,))
+
+                    
+                    assembly.generateMesh(regions=(instance,)) 
+
+
+                    elements = len(instance.elements)
+                    nodes = len(instance.nodes)
+
+                    print("Meshed %s: %d elements, %d nodes" % (instance_name, elements, nodes))
+
+                    meshed_instances.append(instance_name)
+                    total_elements += elements
+                    total_nodes += nodes
+
+                except Exception as e:
+                    print("Meshing error on instance %s: %s" % (instance_name, str(e)))
+
+
+            print("SUMMARY")
+            print("Parts detected: %d" % num_parts_in_file)
+            print("Parts imported: %d" % len(imported_parts))
+            print("Instances meshed: %d" % len(meshed_instances))
+            print("Total elements: %d" % total_elements)
+            print("Total nodes: %d" % total_nodes)
+
+            if len(meshed_instances) == len(valid_parts):
+                print("SUCCESS: All %d instances meshed at assembly level" % len(valid_parts))
+            else:
+                print("Partial success: %d/%d instances meshed" % (len(meshed_instances), len(valid_parts)))  
+
+            job_name = f"temp_inp"
+            os.chdir(results_dir)
+            mdb.Job(name=job_name, model=model_name)
+            mdb.jobs[job_name].writeInput(consistencyChecking=OFF)
+            
+            inp_file = os.path.join(results_dir, "temp_inp.inp")
+            print(f"Saved the model to {{inp_file}}")     
+            mdb.close()
+
+            return inp_file
+
+
+
+
+        def create_elset(temp_inp_file, model_name):
+            file_path = temp_inp_file 
+
+            if not os.path.exists(file_path):
+                raise ValueError("File not found: " + file_path)
+
+            print("Opening file:", file_path)
+            mdb.ModelFromInputFile(name=model_name, inputFileName=file_path)
+
+            model = mdb.models[model_name]
+            print("Working on model:", model_name)
+
+            print("Creating ALL_ELEMENTS sets at PART level...")
+            for part_name, part in model.parts.items(): 
+                if len(part.elements) > 0:   # only if the part has elements
+                    elems = part.elements[:]
+                    if 'ALL_ELEMENTS' in part.sets.keys():
+                        del part.sets['ALL_ELEMENTS']
+                    part.Set(name='ALL_ELEMENTS', elements=elems) 
+                    print("  -> Part:", part_name, "set created.")
+            
+
+
+
+        def save_cae_file(cae_file_path): 
+            print("Saving model...")
+            try:
+                mdb.saveAs(pathName=cae_file_path)
+                print("Saved: %s" % cae_file_path)
+            except Exception as e:
+                print("Save error: %s" % str(e))
+
+
+
+
+        def save_inp_file(job_name, results_dir, model_name, temp_inp_file):
+
+            job = mdb.Job(name=job_name, model=model_name) 
+            os.chdir(results_dir)
+            job.writeInput(consistencyChecking=OFF)
+            print(f".inp file written in current directory: {{job_name}}.inp")
+
+            if os.path.exists(temp_inp_file):
+                os.remove(temp_inp_file) 
+                print(f"Removed temporary file: {{temp_inp_file}}") 
+
+            mdb.close()
+
+            return os.path.join(results_dir, job_name + '.inp') 
+
+
+
+
+        def print_step_attributes(step_file_path):
+            step_geometry = mdb.openStep(fileName=step_file_path)
+            print("Attributes and methods of step_geometry:")
+            for attr in dir(step_geometry):
+                print(attr) 
+
+
+            
+
+
+        if __name__ == "__main__":   
+            step_file_path = r"{step_file_path}"
+            model_name = "{model_name}"
+            mesh_size = {mesh_size}
+            element_type = "{element_type}"
+
+            results_dir = r"{results_dir}"
+            
+            safe_mesh_size = str(mesh_size).replace(".", "p")
+            job_name = f"{{model_name}}_{{element_type}}_mesh_size_{{safe_mesh_size}}"
+            cae_file_path = os.path.join(results_dir, f"{{job_name}}.cae")
+            cae_file_path = os.path.normpath(cae_file_path)
+
+            
+            temp_inp_file = mesh_assembly(
+                step_file_path = step_file_path,
+                model_name = model_name,
+                mesh_size = mesh_size,
+                element_type = element_type, 
+                results_dir = results_dir
+            )  
+            create_elset(temp_inp_file = temp_inp_file, model_name = model_name)
+            temp_mesh_file = save_inp_file(job_name= "temp_mesh", results_dir= results_dir, model_name= model_name, temp_inp_file= temp_inp_file)
+        """)  
+
+        with open(script_path, "w") as file: 
+                file.write(code) 
+
+        print(f"\nPython script successfully created at: {script_path}\n")
+        
+        current_working_dir = executions_dir
+        abaqus_command = ["abaqus", "cae", f"noGUI=CAD_Mesh_Material.py"]
+        subprocess.run(abaqus_command, cwd=current_working_dir, check=True, capture_output=True, text=True, shell=True) 
+
+        temp_mesh_file = os.path.join(results_dir, "temp_mesh.inp") 
+        return temp_mesh_file

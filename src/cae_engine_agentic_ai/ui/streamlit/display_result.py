@@ -217,7 +217,56 @@ class DisplayResultStreamlit:
                 st.success("Successfully assigned material properties") 
                 st.session_state.existing_materials_list = [] 
                 st.session_state.part_names = [] 
-                st.session_state.part_images = {}
+                st.session_state.part_images = {} 
+
+
+
+        elif "cad_to_inp" in st.session_state.response["tool_called"]:  
+
+            if st.session_state.get("current_tool") != "cad_to_inp":
+                st.session_state.current_tool = "cad_to_inp"
+                st.session_state.existing_materials_list = [] 
+                st.session_state.part_names = [] 
+                st.session_state.part_images = {} 
+                st.session_state.inp_file_path = "" 
+                st.session_state.model_name = ""
+    
+            st.header("CAD to INP Generator⚡")
+            results = self.tasks.ask_cad2mesh_assembly_inputs()  
+
+
+            if st.button("Open Material Assigner"):
+                with st.spinner("Processing your request..."): 
+                    temp_mesh_file = self.tasks.cad_to_inp_task( 
+                        step_file_path = results["stp_file_path"],
+                        model_name = results["model_name"],
+                        mesh_size = results["mesh_size"],
+                        element_type = results["element_type"]
+                    )  
+                    
+                    model_name = results["model_name"]
+                    inp_file_path = temp_mesh_file
+
+                    existing_materials_list, part_names, part_images = self.tasks.extract_materials_and_parts_info(model_name= model_name, inp_file_path=inp_file_path)
+                    st.session_state.existing_materials_list = existing_materials_list 
+                    st.session_state.part_names = part_names 
+                    st.session_state.part_images = part_images
+                    st.session_state.inp_file_path = inp_file_path
+
+            self.tasks.ask_material_assignment_inputs(
+                existing_materials_list= st.session_state.existing_materials_list, 
+                part_names = st.session_state.part_names,
+                part_images = st.session_state.part_images
+            ) 
+            
+            if st.button("Submit Values"): 
+                self.tasks.assign_material_properties_tasks(inp_file_path = st.session_state.inp_file_path, model_name= st.session_state.model_name) 
+                st.success("Successfully assigned material properties") 
+                st.session_state.existing_materials_list = [] 
+                st.session_state.part_names = [] 
+                st.session_state.part_images = {} 
+                st.session_state.inp_file_path = "" 
+                st.session_state.model_name = ""
 
         else: 
             return 

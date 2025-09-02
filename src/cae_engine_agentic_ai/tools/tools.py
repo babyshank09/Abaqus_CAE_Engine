@@ -81,10 +81,34 @@ class Tools:
         Display the message that the process has started only after this function is executed, and not before.
         Note: This tool initiates the process for assigning material properties but does not perform the assignment itself.
         """
-        pass 
+        pass  
 
 
+    def cad_to_inp():
+        """
+        Initiates the end-to-end workflow for converting a CAD model into a simulation-ready input file (.inp).
+        This tool automates the intermediate stages including geometry import, meshing, material assignment,
+        and preparation of the analysis setup. The final output of this process is a fully generated Abaqus
+        input file that can be directly used for simulation runs.
+        Execute this tool whenever the user wants to seamlessly transform a CAD model into a structured
+        simulation file without manually performing each step. It is particularly useful for streamlining
+        repetitive preprocessing tasks, ensuring consistency, and reducing setup time.
+        Display the message that the process has started only after this function is executed, and not before.
+        Note: This tool orchestrates the CAD-to-INP pipeline but does not individually expose the intermediate
+        meshing or material assignment operations outside of its workflow.
+        """
+        pass
 
+
+TOOLS = [
+    Tools.cad_to_inp, 
+    Tools.assign_material_properties, 
+    Tools.analyse_single_part, 
+    Tools.analyse_all_parts, 
+    Tools.cad_to_mesh,
+    Tools.cad_to_mesh_assembly, 
+    Tools.generate_inp_scripts
+]
 
 
 
