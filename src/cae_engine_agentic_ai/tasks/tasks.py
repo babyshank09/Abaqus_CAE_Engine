@@ -130,7 +130,7 @@ class Tasks:
                     image_path_abs = self.display_input_model(input_file_address=inp_file_path) 
                     st.image(image_path_abs, 
                             caption="Current Model", 
-                            use_container_width=True,
+                            use_column_width=True,
                             ) 
                     st.success("Model displayed successfully!")
                 
@@ -405,7 +405,7 @@ class Tasks:
 
             drop_axis = "{drop_axis}"
             for angle in range(start_angle, final_angle, step): 
-                job_name = f"e2_{{angle}}"
+                job_name = f"{{model_name}}_{{angle}}"
                 a = mdb.models[model_name].rootAssembly
             
                 a.rotate(instanceList=instance_list, axisPoint=axis_point, axisDirection=axis_dir, angle=float(angle))
@@ -555,12 +555,9 @@ class Tasks:
     def ask_cad2mesh_assembly_inputs(self)-> dict: 
         if "stp_file_path" not in st.session_state: 
             st.session_state.stp_file_path = ""
-        if "mesh_size" not in st.session_state:
-            st.session_state.mesh_size = 1.0
         if "model_name" not in st.session_state:
             st.session_state.model_name = ""
-        if "element_type" not in st.session_state:
-            st.session_state.element_type = ""
+
 
         st.info("This is for an assembly file with multiple parts. If you have a single part file, please use the Single Part option instead.")
 
@@ -568,42 +565,76 @@ class Tasks:
             "Step File Location (e.g., path/to/file.stp or .step)",
             value=st.session_state.stp_file_path
         ) 
-        mesh_size = st.number_input(
-            "Mesh Size",
-            step=0.1,
-            format="%.1f",
-            value=st.session_state.mesh_size,
-            key="mesh_size_input"
-        )
+  
         model_name = st.text_input(
             "Model Name",
             value=st.session_state.model_name,
             key="model_name_input"
         )
 
-        element_types = ["C3D10", "C3D4", "C3D8R", "C3D8I", "C3D10M", "C3D10HS"]
-        element_type = st.selectbox(
-            "Element Type",
-            element_types,
-            key="element_type_input"
-        )   
-
         st.session_state.stp_file_path = stp_file_path
-        st.session_state.mesh_size = mesh_size
         st.session_state.model_name = model_name
-        st.session_state.element_type = element_type
 
         return {
             "stp_file_path": stp_file_path,
-            "mesh_size": mesh_size,
             "model_name": model_name,
-            "element_type": element_type
         }
 
 
 
+    def ask_partwise_mesh_inputs(self, part_names, part_images):  
+        import os 
+        import json 
 
-    def cad_to_mesh_assembly_task(self, step_file_path: str, model_name: str, mesh_size: float, element_type: str):
+        base_dir = os.path.abspath(self.working_dir)
+        executions_dir = os.path.join(base_dir, "Executions")
+        results_dir = os.path.join(base_dir, "Results")
+
+        os.makedirs(executions_dir, exist_ok=True)
+        os.makedirs(results_dir, exist_ok=True) 
+
+
+        mesh_info = {}
+        for i, part_name in enumerate(part_names, start=1):
+            st.subheader(part_name)  
+            renamed_part_name = st.text_input(f"Rename {part_name} (Optional)", value=part_name, key= f"{part_name}_rename")
+
+            image_path = os.path.normpath(part_images.get(part_name, ""))
+
+            if image_path:
+                st.image(image_path, caption=f"{part_name}", use_column_width=True)
+                
+
+            mesh_size = st.number_input(
+                "Mesh Size",
+                step=0.1,
+                format="%.1f",
+                key=f"{part_name}_mesh_size"
+            )
+
+            element_types = ["C3D10", "C3D4", "C3D8R", "C3D8I", "C3D10M", "C3D10HS"]
+            element_type = st.selectbox(
+                "Element Type",
+                element_types,
+                key=f"{part_name}_element_type"
+            )    
+
+
+            mesh_info[part_name] = { 
+                "renamed_part_name": renamed_part_name,
+                "mesh_size": mesh_size,
+                "element_type": element_type
+            } 
+        
+        mesh_info_path = os.path.join(results_dir, "mesh_info.json")
+        with open(mesh_info_path, "w") as f:
+            json.dump(mesh_info, f, indent=4) 
+
+        return mesh_info_path
+
+
+
+    def cad_to_mesh_assembly_task(self, step_file_path: str, model_name: str, mesh_info_path: str):
         import os
         import subprocess
         import textwrap
@@ -625,19 +656,11 @@ class Tasks:
         from abaqusConstants import *
         import part, material, assembly, step, mesh
         import section, regionToolset
-        import os
+        import os 
+        import json
 
 
-        step_file_path = r"{step_file_path}"
-        model_name = "{model_name}"
-        mesh_size = {mesh_size}
-        element_type = "{element_type}"
-        cae_file_path = os.path.join(r"{results_dir}", f"{{model_name}}_{{element_type}}_mesh_size_{{mesh_size}}.cae") 
-        cae_file_path = os.path.normpath(cae_file_path)  
-        elem = False
-
-
-        def mesh_assembly():
+        def mesh_assembly(step_file_path, model_name, results_dir, mesh_info):
             print("AUTOMATIC STEP FILE IMPORT")
 
 
@@ -697,7 +720,7 @@ class Tasks:
             created_instances = []
             for part_name in valid_parts:
                 try:
-                    instance_name = "%s_Instance" % part_name
+                    instance_name = "%s" % part_name
                     assembly.Instance(
                         name=instance_name,
                         part=model.parts[part_name],
@@ -713,15 +736,20 @@ class Tasks:
             meshed_instances = []
             total_elements = 0
             total_nodes = 0
+            elem = False 
+            
+            for instance_name, instance_info in mesh_info.items():
+            #for instance_name in created_instances:
+                element_type = instance_info["element_type"]
+                mesh_size = instance_info["mesh_size"]
 
-            for instance_name in created_instances:
                 try:
                     instance = assembly.instances[instance_name]
 
 
                     assembly.seedPartInstance(
                         regions=(instance,),
-                        size=mesh_size,
+                        size= mesh_size,
                         deviationFactor=0.1,
                         minSizeFactor=0.1
                     )
@@ -794,14 +822,6 @@ class Tasks:
                     print("Meshing error on instance %s: %s" % (instance_name, str(e)))
 
 
-            print("Saving model...")
-            try:
-                mdb.saveAs(pathName=cae_file_path)
-                print("Saved: %s" % cae_file_path)
-            except Exception as e:
-                print("Save error: %s" % str(e))
-
-
             print("SUMMARY")
             print("Parts detected: %d" % num_parts_in_file)
             print("Parts imported: %d" % len(imported_parts))
@@ -812,36 +832,121 @@ class Tasks:
             if len(meshed_instances) == len(valid_parts):
                 print("SUCCESS: All %d instances meshed at assembly level" % len(valid_parts))
             else:
-                print("Partial success: %d/%d instances meshed" % (len(meshed_instances), len(valid_parts))) 
+                print("Partial success: %d/%d instances meshed" % (len(meshed_instances), len(valid_parts)))   
+
+
+            for instance_name, instance_info in mesh_info.items():
+                renamed_part_name = instance_info["renamed_part_name"]
+                rename_part(model, instance_name, renamed_part_name)
+
+
+            job_name = f"temp_inp"
+            os.chdir(results_dir)
+            mdb.Job(name=job_name, model=model_name)
+            mdb.jobs[job_name].writeInput(consistencyChecking=OFF)
+            
+            inp_file = os.path.join(results_dir, "temp_inp.inp")
+            print(f"Saved the model to {{inp_file}}")     
+            mdb.close()
+
+            return inp_file
 
 
 
-        def convert_cae_to_inp(cae_file_path, job_name, output_inp_dir=None):
-            mdb.openAuxMdb(pathName=cae_file_path)
 
-            job = mdb.Job(name=job_name, model=model_name)
+        def rename_part(model, part_name, renamed_part_name):  
+                model.parts.changeKey(fromName=part_name, toName= renamed_part_name)
 
-
-            if output_inp_dir: 
-                inp_file_path = os.path.join(output_inp_dir, job_name + '.inp') 
-
-                if os.path.exists(inp_file_path):
-                    os.remove(inp_file_path) 
-
-                job.writeInput(consistencyChecking=OFF)
-                os.rename(job_name + '.inp', inp_file_path)
-                print(f".inp file written to: {{inp_file_path}}")
-            else: 
-                os.chdir(r"{results_dir}")
-                job.writeInput(consistencyChecking=OFF)
-                print(f".inp file written in current directory: {{job_name}}.inp")
-
-            mdb.closeAuxMdb() 
+                assembly = model.rootAssembly
+                assembly.features.changeKey(fromName=part_name, toName=renamed_part_name)
+                assembly.regenerate()
 
 
-        if __name__ == "__main__":  
-            mesh_assembly()  
-            convert_cae_to_inp(cae_file_path = cae_file_path, job_name = f"{{model_name}}_job" )
+
+
+        def create_elset(temp_inp_file, model_name):
+            file_path = temp_inp_file 
+
+            if not os.path.exists(file_path):
+                raise ValueError("File not found: " + file_path)
+
+            print("Opening file:", file_path)
+            mdb.ModelFromInputFile(name=model_name, inputFileName=file_path)
+
+            model = mdb.models[model_name]
+            print("Working on model:", model_name)
+
+            print("Creating ALL_ELEMENTS sets at PART level...")
+            for part_name, part in model.parts.items(): 
+                if len(part.elements) > 0:   # only if the part has elements
+                    elems = part.elements[:]
+                    if 'ALL_ELEMENTS' in part.sets.keys():
+                        del part.sets['ALL_ELEMENTS']
+                    part.Set(name='ALL_ELEMENTS', elements=elems) 
+                    print("  -> Part:", part_name, "set created.")
+            
+
+
+
+        def save_cae_file(cae_file_path): 
+            print("Saving model...")
+            try:
+                mdb.saveAs(pathName=cae_file_path)
+                print("Saved: %s" % cae_file_path)
+            except Exception as e:
+                print("Save error: %s" % str(e))
+
+
+
+
+        def save_inp_file(job_name, results_dir, model_name, temp_inp_file):
+
+            job = mdb.Job(name=job_name, model=model_name) 
+            os.chdir(results_dir)
+            job.writeInput(consistencyChecking=OFF)
+            print(f".inp file written in current directory: {{job_name}}.inp")
+
+            if os.path.exists(temp_inp_file):
+                os.remove(temp_inp_file) 
+                print(f"Removed temporary file: {{temp_inp_file}}")
+
+            return os.path.join(results_dir, job_name + '.inp') 
+
+
+
+
+        def print_step_attributes(step_file_path):
+            step_geometry = mdb.openStep(fileName=step_file_path)
+            print("Attributes and methods of step_geometry:")
+            for attr in dir(step_geometry):
+                print(attr) 
+
+
+            
+
+
+        if __name__ == "__main__":   
+            step_file_path = r"{step_file_path}"
+            model_name = "{model_name}"
+            job_name = f"{{model_name}}_Mesh" 
+            results_dir = r"{results_dir}"
+            cae_file_path = os.path.join(results_dir, f"{{job_name}}.cae")
+            cae_file_path = os.path.normpath(cae_file_path)
+
+
+
+            json_file_path = r"{mesh_info_path}"
+            with open(json_file_path, "r") as f:
+                mesh_info = json.load(f)
+
+            temp_inp_file = mesh_assembly(
+                step_file_path = step_file_path,
+                model_name = model_name,
+                results_dir = results_dir,
+                mesh_info = mesh_info
+            )
+            create_elset(temp_inp_file = temp_inp_file, model_name = model_name)
+            meshed_inp_file = save_inp_file(job_name= job_name, results_dir= results_dir, model_name= model_name, temp_inp_file= temp_inp_file)
         """) 
 
         with open(script_path, "w") as file: 
@@ -853,7 +958,6 @@ class Tasks:
         abaqus_command = ["abaqus", "cae", f"noGUI=CAD2Mesh_Assembly.py"]
         subprocess.run(abaqus_command, cwd=current_working_dir, check=True, capture_output=True, text=True, shell=True)
         
-
 
 
 
@@ -1854,11 +1958,12 @@ class Tasks:
 
 
     
-    def extract_part_names_and_images(self, model_name, input_inp_path):
+    def extract_part_names_and_images(self, model_name, model_file_path):
         import textwrap  
         import os
-        import subprocess  
-       
+        import subprocess   
+        import json 
+        
         base_dir = os.path.abspath(self.working_dir)
         executions_dir = os.path.join(base_dir, "Executions")
         results_dir = os.path.join(base_dir, "Results")
@@ -1870,43 +1975,91 @@ class Tasks:
         script_path = os.path.join(script_dir, "extract_part_names_and_images.py") 
 
         code =textwrap.dedent(f"""
+        # -*- coding: mbcs -*- 
         from abaqus import *
         from abaqusConstants import *
+        import part, material, assembly, step, mesh
+        import section, regionToolset
         import os 
-        import json 
-                              
-        def create_model(model_name, input_inp_path):
-            mdb.ModelFromInputFile(name=model_name, inputFileName=input_inp_path)
-            model = mdb.models[model_name]
-        
-            print(model.materials)
-            return model 
-
+        import json
                                 
-        def print_part_names(model):
+
+        def create_model(model_name, model_file_path):
+            file_ext = os.path.splitext(model_file_path)[1].lower()
+
+            if file_ext == ".inp":
+                if model_name in mdb.models:
+                    del mdb.models[model_name]
+                    
+                mdb.ModelFromInputFile(name=model_name, inputFileName=model_file_path) 
+                model = mdb.models[model_name]
+                print("INP file loaded:", model_name)
+                return model
+
+            elif file_ext in [".stp", ".step"]:
+                if model_name in mdb.models:
+                    del mdb.models[model_name]
+
+                step_geometry = mdb.openStep(fileName = model_file_path) 
+                num_parts_in_file = step_geometry.numberOfParts
+                print("STEP file contains: %d parts" % num_parts_in_file)
+
+                model = mdb.Model(name=model_name)
+                print("Importing parts...")
+                imported_parts = []
+                failed_imports = []
+
+                for i in range(1, num_parts_in_file + 1):
+                    try:
+                        part_name = "Part_%d" % i
+                        model.PartFromGeometryFile(
+                            name=part_name,
+                            geometryFile=step_geometry,
+                            bodyNum=i,
+                            combine=False,
+                            dimensionality=THREE_D,
+                            type=DEFORMABLE_BODY,
+                            scale=1.0
+                        )
+                        imported_parts.append(part_name)
+                        print("Imported: %s" % part_name)
+
+                    except Exception as e:
+                        failed_imports.append(i)
+                        print("Failed Part %d: %s" % (i, str(e)))
+
+                print("Successfully imported: %d parts" % len(imported_parts))
+                print("STEP file loaded:", model_name)
+                return model
+
+            else:
+                raise ValueError("Unsupported file type: {{}}. Use .inp, .stp, or .step".format(file_ext))
+
+
+        def print_part_names(model, results_dir):
 
             part_list = model.parts.keys()
             print(part_list) 
-                             
+                                
             data ={{"Part_Names": part_list}}
-            
-            part_list_path = os.path.join(r"{results_dir}", "parts.json")
-            with open(part_list_path, "w") as f:    
-                json.dump(data, f, indent=4)  
+
+            part_list_path = os.path.join(results_dir, "parts.json")
+            with open(part_list_path, "w") as f:
+                json.dump(data, f, indent=4)
 
             print(f"The existing Parts are: {{part_list}}")      
 
             
-        def capture_part_images(model):
+        def capture_part_images(model, results_dir):
             vp_name = 'TempViewport'
             session.Viewport(name=vp_name)
             vp = session.viewports[vp_name]
 
-            images_dir = os.path.join(r"{results_dir}", "Part_Images")
+            images_dir = os.path.join(results_dir, "Part_Images")
             if not os.path.exists(images_dir):
                 os.makedirs(images_dir, exist_ok=True)
 
-            part_images = {{}} 
+            part_images = {{}}
 
             for part_name, part in model.parts.items():
                 print(f"Capturing image for part: {{part_name}}")
@@ -1920,26 +2073,27 @@ class Tasks:
 
                 part_images[part_name] = image_file 
 
-            part_images_path = os.path.join(r"{results_dir}", "parts_images.json")
+            part_images_path = os.path.join(results_dir, "parts_images.json")
             with open(part_images_path, "w") as f:    
                 json.dump(part_images, f, indent=4)  
 
 
         if __name__ == "__main__":
-            inp_path = r"{input_inp_path}"
-            model_name = "{model_name}"
+            model_file_path = r"{model_file_path}"
+            model_name = "{model_name}" 
+            results_dir = r"{results_dir}"
 
-            model = create_model(model_name, inp_path)
-            print_part_names(model)
-            capture_part_images(model)
+            model = create_model(model_name, model_file_path)
+            print_part_names(model, results_dir)
+            capture_part_images(model, results_dir) 
         """)
 
         with open(script_path, "w") as file: 
-                file.write(code) 
+                    file.write(code) 
 
         print(f"\nPython script successfully created at: {script_path}\n")
         
-        current_working_dir = executions_dir
+        current_working_dir = executions_dir 
         abaqus_command = ["abaqus", "cae", f"noGUI=extract_part_names_and_images.py"]
         subprocess.run(abaqus_command, cwd= current_working_dir, check=True, capture_output=True, text=True, shell=True)
         
@@ -1959,7 +2113,7 @@ class Tasks:
             return part_data["Part_Names"], images_data
         
         else:
-            print(f"{part_list_path} does not exist.")
+            print(f"{part_list_path} or {part_images_path} does not exist.")
     
 
 
@@ -2017,6 +2171,7 @@ class Tasks:
                 st.image(image_path, caption=f"{part_name}", use_column_width=True)
                 
             selected_material = st.selectbox(f"{part_name} Material", material_list)
+            renamed_part_name = st.text_input(f"Rename {part_name} (Optional)", value=part_name, key= f"{part_name}_rename")
 
             if selected_material == "CUSTOM MATERIAL": 
                 col1, col2, col3, col4 = st.columns(4)
@@ -2085,7 +2240,8 @@ class Tasks:
                 "Temp1": None if (t1 == "" or str(t1).lower() == "nan") else float(t1),
                 "Yield2": None if (y2 == "" or str(y2).lower() == "nan") else float(y2),
                 "Plastic Strain2": None if (ps2 == "" or str(ps2).lower() == "nan") else float(ps2),
-                "Temp2": None if (t2 == "" or str(t2).lower() == "nan") else float(t2) 
+                "Temp2": None if (t2 == "" or str(t2).lower() == "nan") else float(t2), 
+                "Renamed Part Name": renamed_part_name
             }
 
         part_material_properties_path = os.path.join(results_dir, "part_material_properties.json")
@@ -2123,6 +2279,15 @@ class Tasks:
         
             print(model.materials)
             return model 
+                              
+
+
+        def rename_part(model, part_name, renamed_part_name):  
+            model.parts.changeKey(fromName=part_name, toName= renamed_part_name)
+
+            assembly = model.rootAssembly
+            assembly.features.changeKey(fromName=part_name, toName=renamed_part_name)
+            assembly.regenerate()
 
 
 
@@ -2244,7 +2409,7 @@ class Tasks:
             with open(materials_property_path, "r") as f:
                 properties = json.load(f) 
 
-            model = create_model(model_name, inp_path) 
+            model = create_model(model_name, inp_path)  
 
             for part_name, material_properties in properties.items():  
                 modify_or_create_material(model= model, 
@@ -2260,7 +2425,8 @@ class Tasks:
                                         y2 = material_properties["Yield2"],
                                         ps2 = material_properties["Plastic Strain2"],
                                         t2 = material_properties["Temp2"]
-                                        ) 
+                                        )  
+                rename_part(model = model, part_name= part_name, renamed_part_name= material_properties["Renamed Part Name"])
 
             job_name = save_inp_file(model_name= model_name, results_dir = results_dir) 
             save_cae_file(job_name = job_name, results_dir = results_dir)  

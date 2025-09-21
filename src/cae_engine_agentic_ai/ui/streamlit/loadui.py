@@ -23,13 +23,19 @@ class LoadStreamlitUI:
             self.user_controls["working_dir"] = st.text_input("Working Directory", value = r"") 
             
             llm_options = self.config.get_llm_options()  
-            self.user_controls["selected_llm"] = st.selectbox("Select LLM Service Provider", llm_options)  
+            #self.user_controls["selected_llm"] = st.selectbox("Select LLM Service Provider", llm_options)
+            self.user_controls["selected_llm"] = "OpenAI"  
+            
 
             if self.user_controls["selected_llm"] == "OpenAI":  
                 openai_model_options = self.config.get_openai_model_options() 
-                self.user_controls["selected_openai_model"] = st.selectbox("Select OpenAI Model", openai_model_options)  
+                #self.user_controls["selected_openai_model"] = st.selectbox("Select OpenAI Model", openai_model_options)  
+                self.user_controls["selected_openai_model"] = "gpt-4o"
 
-                self.user_controls["OPENAI_API_KEY"] = st.text_input("OpenAI API Key",value ="", type="password") 
+
+                #self.user_controls["OPENAI_API_KEY"] = st.text_input("OpenAI API Key",value ="", type="password") 
+                self.user_controls["OPENAI_API_KEY"] = ""
+
                 if not self.user_controls["OPENAI_API_KEY"]:
                      st.warning("⚠️ Please enter your OpenAI API key to proceed!")  
 

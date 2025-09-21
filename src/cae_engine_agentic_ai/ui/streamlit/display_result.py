@@ -81,21 +81,40 @@ class DisplayResultStreamlit:
                     st.success("successfully executed")
 
 
-        elif "cad_to_mesh_assembly" in st.session_state.response["tool_called"]:  
+        elif "cad_to_mesh_assembly" in st.session_state.response["tool_called"]:   
+            if st.session_state.get("current_tool") != "cad_to_mesh_assembly":
+                st.session_state.current_tool = "cad_to_mesh_assembly"
+                st.session_state.part_names = [] 
+                st.session_state.part_images = {} 
+                st.session_state.step_file_path = "" 
+                st.session_state.model_name = ""
 
             st.header("Assembly Mesh Builder 🛠️")
-            results = self.tasks.ask_cad2mesh_assembly_inputs() 
+            results = self.tasks.ask_cad2mesh_assembly_inputs()  
 
-            if st.button("Submit Values"):
+            if st.button("Open Mesh Builder"):
+                part_names, part_images = self.tasks.extract_part_names_and_images(
+                    model_file_path= results["stp_file_path"],
+                    model_name = results["model_name"]
+                )  
+                st.session_state.part_names = part_names
+                st.session_state.part_images = part_images
+            
+            mesh_info = self.tasks.ask_partwise_mesh_inputs(
+                part_names = st.session_state.part_names,
+                part_images = st.session_state.part_images
+            )
+
+            if st.button("Mesh Parts"):
                 with st.spinner("Processing your request..."): 
                     self.tasks.cad_to_mesh_assembly_task( 
                         step_file_path = results["stp_file_path"],
                         model_name = results["model_name"],
-                        mesh_size = results["mesh_size"],
-                        element_type = results["element_type"]
-                    ) 
-                    
-                    st.success("successfully executed")
+                        mesh_info_path= mesh_info
+                    )  
+                st.session_state.part_names = [] 
+                st.session_state.part_images = {} 
+                st.success("successfully executed")
 
                 
         elif "cad_to_mesh" in st.session_state.response["tool_called"]: 
