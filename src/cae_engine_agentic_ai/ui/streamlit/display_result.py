@@ -168,6 +168,7 @@ class DisplayResultStreamlit:
                 if selected_image_path:
                     st.image(os.path.normpath(selected_image_path), caption="Contour Plot", use_column_width=True)
 
+
                      
         elif "analyse_single_part" in st.session_state.response["tool_called"]:
 
@@ -207,6 +208,7 @@ class DisplayResultStreamlit:
                     st.image(os.path.normpath(selected_image_path), caption="Contour Plot", use_column_width=True)
 
         
+
         elif "assign_material_properties" in st.session_state.response["tool_called"]: 
             st.header("Assign Material Properties🪨")
 
@@ -240,27 +242,41 @@ class DisplayResultStreamlit:
 
 
 
-        elif "cad_to_inp" in st.session_state.response["tool_called"]:  
+        elif "cad_to_inp" in st.session_state.response["tool_called"]:    
+            st.header("CAD to INP Generator⚡")
 
             if st.session_state.get("current_tool") != "cad_to_inp":
                 st.session_state.current_tool = "cad_to_inp"
                 st.session_state.existing_materials_list = [] 
+                st.session_state.part_names_mesh_task = [] 
+                st.session_state.part_images_mesh_task = {}  
                 st.session_state.part_names = [] 
                 st.session_state.part_images = {} 
                 st.session_state.inp_file_path = "" 
                 st.session_state.model_name = ""
-    
-            st.header("CAD to INP Generator⚡")
-            results = self.tasks.ask_cad2mesh_assembly_inputs()  
+
+            results = self.tasks.ask_cad2mesh_assembly_inputs()   
+
+            if st.button("Step 1: Open Mesh Builder"):
+                part_names, part_images = self.tasks.extract_part_names_and_images(
+                    model_file_path= results["stp_file_path"],
+                    model_name = results["model_name"]
+                )  
+                st.session_state.part_names_mesh_task = part_names
+                st.session_state.part_images_mesh_task = part_images
+            
+            mesh_info = self.tasks.ask_partwise_mesh_inputs(
+                part_names = st.session_state.part_names_mesh_task,
+                part_images = st.session_state.part_images_mesh_task
+            )
 
 
-            if st.button("Open Material Assigner"):
+            if st.button("Step 2: Open Material Assigner"):
                 with st.spinner("Processing your request..."): 
                     temp_mesh_file = self.tasks.cad_to_inp_task( 
                         step_file_path = results["stp_file_path"],
                         model_name = results["model_name"],
-                        mesh_size = results["mesh_size"],
-                        element_type = results["element_type"]
+                        mesh_info_path = mesh_info
                     )  
                     
                     model_name = results["model_name"]
@@ -277,13 +293,15 @@ class DisplayResultStreamlit:
                 part_names = st.session_state.part_names,
                 part_images = st.session_state.part_images
             ) 
-            
-            if st.button("Submit Values"): 
+
+            if st.button("Step 3: Submit Values"): 
                 self.tasks.assign_material_properties_tasks(inp_file_path = st.session_state.inp_file_path, model_name= st.session_state.model_name) 
                 st.success("Successfully assigned material properties") 
                 st.session_state.existing_materials_list = [] 
                 st.session_state.part_names = [] 
                 st.session_state.part_images = {} 
+                st.session_state.part_names_mesh_task = []
+                st.session_state.part_images_mesh_task = {}
                 st.session_state.inp_file_path = "" 
                 st.session_state.model_name = ""
 

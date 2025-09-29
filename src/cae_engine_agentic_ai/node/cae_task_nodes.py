@@ -9,7 +9,7 @@ class CAETaskNode:
     def assistant_node(self, state:State)-> dict: 
         content = """ 
         Your name is Jarvis. You are a helpful assistant tasked with performing Abaqus Software related tasks. 
-        The user will give you the input from their side.Check if the user input is enough to execute the tasks. 
+        The user will give you the input from their side. Check if the user input is enough to execute the tasks. 
         If their input is not sufficient, ask for the missing inputs that are required and then execute the task.
         """   
         

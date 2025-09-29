@@ -1,6 +1,9 @@
 import streamlit as st 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage 
-from src.cae_engine_agentic_ai.ui.uiconfigfile import Config 
+from src.cae_engine_agentic_ai.ui.uiconfigfile import Config  
+import os  
+import dotenv 
+from dotenv import load_dotenv 
 
 
 class LoadStreamlitUI: 

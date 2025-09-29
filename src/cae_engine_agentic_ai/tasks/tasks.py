@@ -693,7 +693,7 @@ class Tasks:
                         scale=1.0
                     )
                     imported_parts.append(part_name)
-                    print("Imported: %s" % part_name)
+                    print("Imported: %s" % part_name) 
 
                 except Exception as e:
                     failed_imports.append(i)
@@ -761,7 +761,7 @@ class Tasks:
                             if element_type in ["C3D8R", "C3D8I"]:
                                 assembly.setMeshControls(
                                     regions=cells,
-                                    technique=STRUCTURED,
+                                    technique=SWEEP,
                                     elemShape=HEX 
                                 )
                                 elem =True
@@ -947,6 +947,7 @@ class Tasks:
             )
             create_elset(temp_inp_file = temp_inp_file, model_name = model_name)
             meshed_inp_file = save_inp_file(job_name= job_name, results_dir= results_dir, model_name= model_name, temp_inp_file= temp_inp_file)
+            save_cae_file(cae_file_path= cae_file_path)
         """) 
 
         with open(script_path, "w") as file: 
@@ -2141,7 +2142,7 @@ class Tasks:
    
     def extract_materials_and_parts_info(self, model_name, inp_file_path):
         existing_materials_list = self.extract_existing_materials(model_name, input_inp_path= inp_file_path) 
-        part_names, part_images = self.extract_part_names_and_images(model_name, input_inp_path= inp_file_path)  
+        part_names, part_images = self.extract_part_names_and_images(model_name, model_file_path= inp_file_path)  
 
         return existing_materials_list, part_names, part_images
 
@@ -2448,7 +2449,7 @@ class Tasks:
 
 
 
-    def cad_to_inp_task(self, step_file_path, model_name, mesh_size, element_type):
+    def cad_to_inp_task(self, step_file_path, model_name, mesh_info_path):
         import os
         import subprocess
         import textwrap
@@ -2464,16 +2465,17 @@ class Tasks:
         script_path = os.path.join(script_dir, "CAD_Mesh_Material.py") 
 
 
-        code= textwrap.dedent(f"""
+        code= textwrap.dedent(f""" 
         # -*- coding: mbcs -*-
         from abaqus import *
         from abaqusConstants import *
         import part, material, assembly, step, mesh
         import section, regionToolset
-        import os
+        import os 
+        import json 
 
-
-        def mesh_assembly(step_file_path, model_name, mesh_size, element_type, results_dir):
+                                  
+        def mesh_assembly(step_file_path, model_name, results_dir, mesh_info):
             print("AUTOMATIC STEP FILE IMPORT")
 
 
@@ -2533,7 +2535,7 @@ class Tasks:
             created_instances = []
             for part_name in valid_parts:
                 try:
-                    instance_name = "%s_Instance" % part_name
+                    instance_name = "%s" % part_name
                     assembly.Instance(
                         name=instance_name,
                         part=model.parts[part_name],
@@ -2550,15 +2552,19 @@ class Tasks:
             total_elements = 0
             total_nodes = 0
             elem = False 
+            
+            for instance_name, instance_info in mesh_info.items():
+            #for instance_name in created_instances:
+                element_type = instance_info["element_type"]
+                mesh_size = instance_info["mesh_size"]
 
-            for instance_name in created_instances:
                 try:
                     instance = assembly.instances[instance_name]
 
 
                     assembly.seedPartInstance(
                         regions=(instance,),
-                        size=mesh_size,
+                        size= mesh_size,
                         deviationFactor=0.1,
                         minSizeFactor=0.1
                     )
@@ -2570,7 +2576,7 @@ class Tasks:
                             if element_type in ["C3D8R", "C3D8I"]:
                                 assembly.setMeshControls(
                                     regions=cells,
-                                    technique=STRUCTURED,
+                                    technique=SWEEP,
                                     elemShape=HEX 
                                 )
                                 elem =True
@@ -2641,7 +2647,13 @@ class Tasks:
             if len(meshed_instances) == len(valid_parts):
                 print("SUCCESS: All %d instances meshed at assembly level" % len(valid_parts))
             else:
-                print("Partial success: %d/%d instances meshed" % (len(meshed_instances), len(valid_parts)))  
+                print("Partial success: %d/%d instances meshed" % (len(meshed_instances), len(valid_parts)))   
+
+
+            for instance_name, instance_info in mesh_info.items():
+                renamed_part_name = instance_info["renamed_part_name"]
+                rename_part(model, instance_name, renamed_part_name)
+
 
             job_name = f"temp_inp"
             os.chdir(results_dir)
@@ -2649,12 +2661,20 @@ class Tasks:
             mdb.jobs[job_name].writeInput(consistencyChecking=OFF)
             
             inp_file = os.path.join(results_dir, "temp_inp.inp")
-            print(f"Saved the model to {{inp_file}}")     
+            print(f"Saved the model to {{inp_file}}")
             mdb.close()
 
             return inp_file
 
 
+
+        def rename_part(model, part_name, renamed_part_name):  
+            model.parts.changeKey(fromName=part_name, toName= renamed_part_name)
+
+            assembly = model.rootAssembly
+            assembly.features.changeKey(fromName=part_name, toName=renamed_part_name)
+            assembly.regenerate()
+                              
 
 
         def create_elset(temp_inp_file, model_name):
@@ -2723,24 +2743,19 @@ class Tasks:
         if __name__ == "__main__":   
             step_file_path = r"{step_file_path}"
             model_name = "{model_name}"
-            mesh_size = {mesh_size}
-            element_type = "{element_type}"
-
             results_dir = r"{results_dir}"
             
-            safe_mesh_size = str(mesh_size).replace(".", "p")
-            job_name = f"{{model_name}}_{{element_type}}_mesh_size_{{safe_mesh_size}}"
-            cae_file_path = os.path.join(results_dir, f"{{job_name}}.cae")
-            cae_file_path = os.path.normpath(cae_file_path)
+            json_file_path = r"{mesh_info_path}"
+            with open(json_file_path, "r") as f: 
+                mesh_info = json.load(f) 
 
-            
             temp_inp_file = mesh_assembly(
                 step_file_path = step_file_path,
                 model_name = model_name,
-                mesh_size = mesh_size,
-                element_type = element_type, 
-                results_dir = results_dir
-            )  
+                results_dir = results_dir,
+                mesh_info = mesh_info
+            )
+
             create_elset(temp_inp_file = temp_inp_file, model_name = model_name)
             temp_mesh_file = save_inp_file(job_name= "temp_mesh", results_dir= results_dir, model_name= model_name, temp_inp_file= temp_inp_file)
         """)  
