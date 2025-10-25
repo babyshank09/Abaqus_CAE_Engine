@@ -1,5 +1,6 @@
 from src.cae_engine_agentic_ai.state.state import State
-from langchain_core.messages import SystemMessage, AIMessage, HumanMessage         
+from langchain_core.messages import SystemMessage, AIMessage, HumanMessage   
+import streamlit as st       
 
 
 class CAETaskNode: 
@@ -15,6 +16,7 @@ class CAETaskNode:
         
         sys_msg = SystemMessage(content = content)  
         msg = self.llm_with_tools.invoke([sys_msg] + state["messages"]) 
+        # st.write(msg.tool_calls[0]["name"])
 
         tool_flag =False
         if "tool_calls" in msg.additional_kwargs: 
@@ -22,7 +24,11 @@ class CAETaskNode:
             tool_calls = msg.additional_kwargs["tool_calls"]
             for call in tool_calls:
                 function_name = call["function"]["name"]
-                #print("Tool function name:", function_name)
+                #print("Tool function name:", function_name) 
+
+        elif msg.tool_calls:
+            tool_flag =True  
+            function_name = msg.tool_calls[0]["name"]
         
         updated_tool_called = state.get("tool_called", []).copy()
         if tool_flag:

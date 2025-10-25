@@ -37,7 +37,7 @@ class LoadStreamlitUI:
 
 
                 #self.user_controls["OPENAI_API_KEY"] = st.text_input("OpenAI API Key",value ="", type="password") 
-                self.user_controls["OPENAI_API_KEY"] = ""
+                self.user_controls["OPENAI_API_KEY"] = "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"
 
                 if not self.user_controls["OPENAI_API_KEY"]:
                      st.warning("⚠️ Please enter your OpenAI API key to proceed!")  

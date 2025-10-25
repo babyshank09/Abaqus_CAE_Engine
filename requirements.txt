@@ -17,4 +17,8 @@ langgraph
 langgraph-cli[inmem] 
 streamlit 
 azure-identity 
-openpyxl
+openpyxl 
+langchain-ollama
+PyQt5 
+requests 
+pyinstaller

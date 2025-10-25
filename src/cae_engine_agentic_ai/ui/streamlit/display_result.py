@@ -53,6 +53,8 @@ class DisplayResultStreamlit:
             parsed_response = response["messages"][-1].content 
             st.session_state.chat_history.append(AIMessage(parsed_response))
             st.chat_message("assistant").write(st.session_state.chat_history[-1].content)  
+            # st.write(st.session_state.chat_history) 
+            # st.write(st.session_state.response)
         
 
     

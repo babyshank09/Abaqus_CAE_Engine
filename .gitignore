@@ -2,3 +2,7 @@ venv/
 api.env
 Abaqus_Environment 
 src/cae_engine_agentic_ai/ui/streamlit/display_result_test.py
+gui_test_2.py
+gui_test.py 
+test.py 
+test_2.py
