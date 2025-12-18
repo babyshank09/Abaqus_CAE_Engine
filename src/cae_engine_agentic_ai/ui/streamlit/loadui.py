@@ -32,12 +32,9 @@ class LoadStreamlitUI:
 
             if self.user_controls["selected_llm"] == "OpenAI":  
                 openai_model_options = self.config.get_openai_model_options() 
-                #self.user_controls["selected_openai_model"] = st.selectbox("Select OpenAI Model", openai_model_options)  
-                self.user_controls["selected_openai_model"] = "gpt-4o"
-
-
-                #self.user_controls["OPENAI_API_KEY"] = st.text_input("OpenAI API Key",value ="", type="password") 
-                self.user_controls["OPENAI_API_KEY"] = ""
+                self.user_controls["selected_openai_model"] = st.selectbox("Select OpenAI Model", openai_model_options) 
+                self.user_controls["OPENAI_API_KEY"] = st.text_input("OpenAI API Key",value ="", type="password") 
+             
 
                 if not self.user_controls["OPENAI_API_KEY"]:
                      st.warning("⚠️ Please enter your OpenAI API key to proceed!")  
@@ -69,6 +66,7 @@ class LoadStreamlitUI:
 
 
             
+
 
 
 
